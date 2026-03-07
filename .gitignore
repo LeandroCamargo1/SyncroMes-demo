@@ -27,5 +27,6 @@ Thumbs.db
 # Build
 *.log
 
-# Subprojeto legado
+# Legado
 ProjetoMes/
+synchro-mes/
