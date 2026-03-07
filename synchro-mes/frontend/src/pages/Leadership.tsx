@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import api from '../services/api';
 import { Users, Calendar, UserX, Plus, ClipboardList } from 'lucide-react';
+import { DonutChart } from '../components/charts';
 
 export default function Leadership() {
   const [tab, setTab] = useState('schedule');
@@ -89,6 +90,40 @@ export default function Leadership() {
           <p className="text-2xl font-bold text-emerald-600">{summary.justified_absences || 0}</p>
         </div>
       </div>
+
+      {/* Absence reason chart */}
+      {absences.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="card">
+            <h3 className="text-sm font-semibold text-surface-800 mb-1">Ausências por Motivo</h3>
+            <p className="text-xs text-surface-400 mb-4">Distribuição por tipo de ausência</p>
+            <DonutChart
+              data={(() => {
+                const m: Record<string, number> = {};
+                absences.forEach((a: any) => { m[reasonLabels[a.reason] || a.reason] = (m[reasonLabels[a.reason] || a.reason] || 0) + 1; });
+                return Object.entries(m).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
+              })()}
+              colors={['#ef4444', '#f59e0b', '#f97316', '#3b82f6', '#94a3b8']}
+              innerValue={String(absences.length)}
+              innerLabel="ausências"
+            />
+          </div>
+          <div className="card">
+            <h3 className="text-sm font-semibold text-surface-800 mb-1">Justificadas vs Não</h3>
+            <p className="text-xs text-surface-400 mb-4">Taxa de justificação</p>
+            <DonutChart
+              data={[
+                { name: 'Justificadas', value: summary.justified_absences || 0 },
+                { name: 'Não justificadas', value: (summary.total_absences || 0) - (summary.justified_absences || 0) },
+              ]}
+              colors={['#10b981', '#ef4444']}
+              innerValue={summary.total_absences > 0 ? `${((summary.justified_absences || 0) / summary.total_absences * 100).toFixed(0)}%` : '—'}
+              innerLabel="justific."
+              height={200}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="tab-bar w-fit">

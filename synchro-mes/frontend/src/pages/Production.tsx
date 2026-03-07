@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import api from '../services/api';
 import { Package, ClipboardList } from 'lucide-react';
+import { DonutChart, OutputVsTargetChart } from '../components/charts';
 
 export default function Production() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -28,6 +29,25 @@ export default function Production() {
       setLoading(false);
     }
   };
+
+  // Order stats for charts
+  const orderStatusData = useMemo(() => {
+    const st: Record<string, number> = {};
+    orders.forEach(o => { st[o.status] = (st[o.status] || 0) + 1; });
+    const labels: Record<string, string> = { in_progress: 'Em Produção', planned: 'Planejada', completed: 'Concluída', cancelled: 'Cancelada' };
+    return Object.entries(st).map(([k, v]) => ({ name: labels[k] || k, value: v }));
+  }, [orders]);
+
+  const orderOutputData = useMemo(() => {
+    return orders
+      .filter(o => o.quantity_planned > 0)
+      .slice(0, 8)
+      .map(o => ({
+        name: o.order_number?.slice(-6) || `#${o.id}`,
+        planned: o.quantity_planned || 0,
+        produced: o.quantity_produced || 0,
+      }));
+  }, [orders]);
 
   const statusBadge = (status: string) => {
     const map: Record<string, { cls: string; label: string }> = {
@@ -69,7 +89,30 @@ export default function Production() {
           <div className="spinner w-8 h-8" />
         </div>
       ) : tab === 'orders' ? (
-        <div className="card p-0 overflow-hidden">
+        <div className="space-y-6">
+          {/* Order Charts */}
+          {orders.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="card">
+                <h3 className="text-sm font-semibold text-surface-800 mb-1">Planejado vs Produzido</h3>
+                <p className="text-xs text-surface-400 mb-4">Acompanhamento por ordem</p>
+                <OutputVsTargetChart data={orderOutputData} />
+              </div>
+              <div className="card">
+                <h3 className="text-sm font-semibold text-surface-800 mb-1">Status das Ordens</h3>
+                <p className="text-xs text-surface-400 mb-4">Distribuição por status</p>
+                <DonutChart
+                  data={orderStatusData}
+                  colors={['#10b981', '#3b82f6', '#94a3b8', '#ef4444']}
+                  innerValue={String(orders.length)}
+                  innerLabel="Ordens"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Orders Table */}
+          <div className="card p-0 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="table-modern">
               <thead>
@@ -99,6 +142,7 @@ export default function Production() {
                 ))}
               </tbody>
             </table>
+          </div>
           </div>
         </div>
       ) : (

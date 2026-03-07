@@ -18,6 +18,8 @@ const DEV_USER: User = {
   },
   sector: 'producao',
   avatar_initials: 'AD',
+  created_at: new Date().toISOString(),
+  last_login: new Date().toISOString(),
 };
 
 interface AuthContextValue {

@@ -4,6 +4,7 @@ import { wsService } from '../services/websocket';
 import { Activity, Zap, CheckCircle, AlertTriangle, Package, XCircle, TrendingUp, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 import MachineGrid from '../components/dashboard/MachineGrid';
 import OeeGauge from '../components/dashboard/OeeGauge';
+import { ProductionBarChart, HorizontalBarChart } from '../components/charts';
 
 export default function Dashboard() {
   const [summary, setSummary] = useState<any>(null);
@@ -150,6 +151,30 @@ export default function Dashboard() {
             )}
           </div>
           <MachineGrid machines={summary.machines} />
+        </div>
+      </div>
+
+      {/* Charts — Siemens Opcenter style */}
+      <div className="grid lg:grid-cols-2 gap-6">
+        <div className="card">
+          <h2 className="text-base font-semibold text-surface-900 mb-1">Produção por Máquina</h2>
+          <p className="text-xs text-surface-400 mb-4">Peças boas vs refugo — hoje</p>
+          <ProductionBarChart
+            data={summary.machines
+              .filter((m: any) => (m.produced_today || 0) + (m.rejected_today || 0) > 0)
+              .map((m: any) => ({ name: m.code, produced: m.produced_today || 0, rejected: m.rejected_today || 0 }))}
+          />
+        </div>
+        <div className="card">
+          <h2 className="text-base font-semibold text-surface-900 mb-1">OEE por Máquina</h2>
+          <p className="text-xs text-surface-400 mb-4">Ranking de eficiência</p>
+          <HorizontalBarChart
+            data={summary.machines
+              .filter((m: any) => m.oee != null && m.oee > 0)
+              .sort((a: any, b: any) => (b.oee || 0) - (a.oee || 0))
+              .map((m: any) => ({ name: m.code, value: m.oee || 0 }))}
+            target={85}
+          />
         </div>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
 import { FileText, Download, BarChart3, TrendingUp, ShieldCheck } from 'lucide-react';
+import { DonutChart, ParetoChart } from '../components/charts';
 
 const REPORT_TYPES = [
   { key: 'production', label: 'Produção', icon: BarChart3, description: 'Relatório por máquina, produto e período' },
@@ -93,74 +94,123 @@ export default function Reports() {
 
           {/* Produção */}
           {selectedReport === 'production' && (
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-              <div className="bg-surface-50 rounded-xl p-4 text-center">
-                <p className="text-xs text-surface-400 uppercase font-medium">Total Ordens</p>
-                <p className="text-2xl font-bold text-primary-600 mt-1">{data.orders}</p>
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="bg-surface-50 rounded-xl p-4 text-center">
+                  <p className="text-xs text-surface-400 uppercase font-medium">Total Ordens</p>
+                  <p className="text-2xl font-bold text-primary-600 mt-1">{data.orders}</p>
+                </div>
+                <div className="bg-surface-50 rounded-xl p-4 text-center">
+                  <p className="text-xs text-surface-400 uppercase font-medium">Em Produção</p>
+                  <p className="text-2xl font-bold text-emerald-600 mt-1">{data.inProgress}</p>
+                </div>
+                <div className="bg-surface-50 rounded-xl p-4 text-center">
+                  <p className="text-xs text-surface-400 uppercase font-medium">Concluídas</p>
+                  <p className="text-2xl font-bold text-blue-600 mt-1">{data.completed}</p>
+                </div>
+                <div className="bg-surface-50 rounded-xl p-4 text-center">
+                  <p className="text-xs text-surface-400 uppercase font-medium">Peças Boas</p>
+                  <p className="text-2xl font-bold text-emerald-600 mt-1">{data.totalGood?.toLocaleString('pt-BR')}</p>
+                </div>
+                <div className="bg-surface-50 rounded-xl p-4 text-center">
+                  <p className="text-xs text-surface-400 uppercase font-medium">Refugo</p>
+                  <p className="text-2xl font-bold text-red-600 mt-1">{data.totalRej?.toLocaleString('pt-BR')}</p>
+                </div>
+                <div className="bg-surface-50 rounded-xl p-4 text-center">
+                  <p className="text-xs text-surface-400 uppercase font-medium">Taxa Aprovação</p>
+                  <p className="text-2xl font-bold text-primary-600 mt-1">{data.approvalRate}%</p>
+                </div>
               </div>
-              <div className="bg-surface-50 rounded-xl p-4 text-center">
-                <p className="text-xs text-surface-400 uppercase font-medium">Em Produção</p>
-                <p className="text-2xl font-bold text-emerald-600 mt-1">{data.inProgress}</p>
-              </div>
-              <div className="bg-surface-50 rounded-xl p-4 text-center">
-                <p className="text-xs text-surface-400 uppercase font-medium">Concluídas</p>
-                <p className="text-2xl font-bold text-blue-600 mt-1">{data.completed}</p>
-              </div>
-              <div className="bg-surface-50 rounded-xl p-4 text-center">
-                <p className="text-xs text-surface-400 uppercase font-medium">Peças Boas</p>
-                <p className="text-2xl font-bold text-emerald-600 mt-1">{data.totalGood?.toLocaleString('pt-BR')}</p>
-              </div>
-              <div className="bg-surface-50 rounded-xl p-4 text-center">
-                <p className="text-xs text-surface-400 uppercase font-medium">Refugo</p>
-                <p className="text-2xl font-bold text-red-600 mt-1">{data.totalRej?.toLocaleString('pt-BR')}</p>
-              </div>
-              <div className="bg-surface-50 rounded-xl p-4 text-center">
-                <p className="text-xs text-surface-400 uppercase font-medium">Taxa Aprovação</p>
-                <p className="text-2xl font-bold text-primary-600 mt-1">{data.approvalRate}%</p>
+              <div className="flex justify-center">
+                <div className="w-full max-w-xs">
+                  <h4 className="text-sm font-semibold text-surface-700 mb-2 text-center">Boas vs Refugo</h4>
+                  <DonutChart
+                    data={[{ name: 'Boas', value: data.totalGood || 0 }, { name: 'Refugo', value: data.totalRej || 0 }]}
+                    colors={['#10b981', '#ef4444']}
+                    innerValue={`${data.approvalRate}%`}
+                    innerLabel="Aprovação"
+                    height={180}
+                  />
+                </div>
               </div>
             </div>
           )}
 
           {/* OEE */}
           {selectedReport === 'oee' && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-surface-50 rounded-xl p-4 text-center">
-                <p className="text-xs text-surface-400 uppercase font-medium">OEE</p>
-                <p className="text-2xl font-bold text-primary-600 mt-1">{data.oee?.toFixed(1) || '—'}%</p>
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-surface-50 rounded-xl p-4 text-center">
+                  <p className="text-xs text-surface-400 uppercase font-medium">OEE</p>
+                  <p className="text-2xl font-bold text-primary-600 mt-1">{data.oee?.toFixed(1) || '—'}%</p>
+                </div>
+                <div className="bg-surface-50 rounded-xl p-4 text-center">
+                  <p className="text-xs text-surface-400 uppercase font-medium">Disponibilidade</p>
+                  <p className="text-2xl font-bold text-emerald-600 mt-1">{data.availability?.toFixed(1) || '—'}%</p>
+                </div>
+                <div className="bg-surface-50 rounded-xl p-4 text-center">
+                  <p className="text-xs text-surface-400 uppercase font-medium">Performance</p>
+                  <p className="text-2xl font-bold text-blue-600 mt-1">{data.performance?.toFixed(1) || '—'}%</p>
+                </div>
+                <div className="bg-surface-50 rounded-xl p-4 text-center">
+                  <p className="text-xs text-surface-400 uppercase font-medium">Qualidade</p>
+                  <p className="text-2xl font-bold text-violet-600 mt-1">{data.quality?.toFixed(1) || '—'}%</p>
+                </div>
               </div>
-              <div className="bg-surface-50 rounded-xl p-4 text-center">
-                <p className="text-xs text-surface-400 uppercase font-medium">Disponibilidade</p>
-                <p className="text-2xl font-bold text-emerald-600 mt-1">{data.availability?.toFixed(1) || '—'}%</p>
-              </div>
-              <div className="bg-surface-50 rounded-xl p-4 text-center">
-                <p className="text-xs text-surface-400 uppercase font-medium">Performance</p>
-                <p className="text-2xl font-bold text-blue-600 mt-1">{data.performance?.toFixed(1) || '—'}%</p>
-              </div>
-              <div className="bg-surface-50 rounded-xl p-4 text-center">
-                <p className="text-xs text-surface-400 uppercase font-medium">Qualidade</p>
-                <p className="text-2xl font-bold text-violet-600 mt-1">{data.quality?.toFixed(1) || '—'}%</p>
+              <div className="flex justify-center">
+                <div className="w-full max-w-xs">
+                  <h4 className="text-sm font-semibold text-surface-700 mb-2 text-center">Composição OEE</h4>
+                  <DonutChart
+                    data={[
+                      { name: 'Disponibilidade', value: data.availability || 0 },
+                      { name: 'Performance', value: data.performance || 0 },
+                      { name: 'Qualidade', value: data.quality || 0 },
+                    ]}
+                    colors={['#10b981', '#3b82f6', '#8b5cf6']}
+                    innerValue={`${data.oee?.toFixed(1) || '—'}%`}
+                    innerLabel="OEE"
+                    height={200}
+                  />
+                </div>
               </div>
             </div>
           )}
 
           {/* Quality */}
           {selectedReport === 'quality' && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-surface-50 rounded-xl p-4 text-center">
-                <p className="text-xs text-surface-400 uppercase font-medium">Total Medições</p>
-                <p className="text-2xl font-bold text-primary-600 mt-1">{data.total_measurements}</p>
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-surface-50 rounded-xl p-4 text-center">
+                  <p className="text-xs text-surface-400 uppercase font-medium">Total Medições</p>
+                  <p className="text-2xl font-bold text-primary-600 mt-1">{data.total_measurements}</p>
+                </div>
+                <div className="bg-surface-50 rounded-xl p-4 text-center">
+                  <p className="text-xs text-surface-400 uppercase font-medium">Aprovados</p>
+                  <p className="text-2xl font-bold text-emerald-600 mt-1">{data.approved}</p>
+                </div>
+                <div className="bg-surface-50 rounded-xl p-4 text-center">
+                  <p className="text-xs text-surface-400 uppercase font-medium">Rejeitados</p>
+                  <p className="text-2xl font-bold text-red-600 mt-1">{data.rejected}</p>
+                </div>
+                <div className="bg-surface-50 rounded-xl p-4 text-center">
+                  <p className="text-xs text-surface-400 uppercase font-medium">Taxa Aprovação</p>
+                  <p className="text-2xl font-bold text-emerald-600 mt-1">{data.approval_rate}%</p>
+                </div>
               </div>
-              <div className="bg-surface-50 rounded-xl p-4 text-center">
-                <p className="text-xs text-surface-400 uppercase font-medium">Aprovados</p>
-                <p className="text-2xl font-bold text-emerald-600 mt-1">{data.approved}</p>
-              </div>
-              <div className="bg-surface-50 rounded-xl p-4 text-center">
-                <p className="text-xs text-surface-400 uppercase font-medium">Rejeitados</p>
-                <p className="text-2xl font-bold text-red-600 mt-1">{data.rejected}</p>
-              </div>
-              <div className="bg-surface-50 rounded-xl p-4 text-center">
-                <p className="text-xs text-surface-400 uppercase font-medium">Taxa Aprovação</p>
-                <p className="text-2xl font-bold text-emerald-600 mt-1">{data.approval_rate}%</p>
+              <div className="flex justify-center">
+                <div className="w-full max-w-xs">
+                  <h4 className="text-sm font-semibold text-surface-700 mb-2 text-center">Aprovação</h4>
+                  <DonutChart
+                    data={[
+                      { name: 'Aprovados', value: data.approved || 0 },
+                      { name: 'Rejeitados', value: data.rejected || 0 },
+                    ]}
+                    colors={['#10b981', '#ef4444']}
+                    innerValue={`${data.approval_rate || 0}%`}
+                    innerLabel="Aprovação"
+                    height={180}
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -183,21 +233,22 @@ export default function Reports() {
                 </div>
               </div>
               {data.categories?.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-semibold text-surface-700 mb-3">Por Categoria</h4>
-                  <div className="space-y-3">
-                    {data.categories.map(([cat, mins]: [string, number]) => (
-                      <div key={cat}>
-                        <div className="flex justify-between text-sm mb-1">
-                          <span className="font-medium text-surface-700 capitalize">{cat}</span>
-                          <span className="tabular-nums text-surface-500">{Math.round(mins)} min</span>
-                        </div>
-                        <div className="h-2 rounded-full bg-surface-100 overflow-hidden">
-                          <div className="h-full rounded-full bg-red-500 transition-all"
-                            style={{ width: `${(mins / (data.categories[0]?.[1] || 1)) * 100}%` }} />
-                        </div>
-                      </div>
-                    ))}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div>
+                    <h4 className="text-sm font-semibold text-surface-700 mb-3">Pareto de Paradas</h4>
+                    <ParetoChart
+                      data={data.categories.map(([cat, mins]: [string, number]) => ({ name: cat, value: Math.round(mins) }))}
+                      unit=" min"
+                      barColor="#f59e0b"
+                    />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-surface-700 mb-3">Distribuição por Categoria</h4>
+                    <DonutChart
+                      data={data.categories.map(([cat, mins]: [string, number]) => ({ name: cat, value: Math.round(mins) }))}
+                      innerValue={`${data.totalMinutes}`}
+                      innerLabel="min total"
+                    />
                   </div>
                 </div>
               )}

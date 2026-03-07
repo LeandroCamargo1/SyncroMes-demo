@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import api from '../services/api';
 import { AlertOctagon, History, Timer } from 'lucide-react';
+import { ParetoChart, DonutChart } from '../components/charts';
 
 export default function Downtimes() {
   const [active, setActive] = useState<any[]>([]);
@@ -53,6 +54,19 @@ export default function Downtimes() {
     const m = mins % 60;
     return `${h}h${m > 0 ? `${m}min` : ''}`;
   };
+
+  // Aggregations for history charts
+  const historyByCategory = useMemo(() => {
+    const map: Record<string, number> = {};
+    history.forEach(d => { map[d.category] = (map[d.category] || 0) + (d.duration_minutes || 0); });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value: Math.round(value) }));
+  }, [history]);
+
+  const historyByReason = useMemo(() => {
+    const map: Record<string, number> = {};
+    history.forEach(d => { map[d.reason || 'Sem motivo'] = (map[d.reason || 'Sem motivo'] || 0) + (d.duration_minutes || 0); });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([name, value]) => ({ name: name.length > 20 ? name.slice(0, 20) + '…' : name, value: Math.round(value) }));
+  }, [history]);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -134,7 +148,29 @@ export default function Downtimes() {
           </div>
         )
       ) : (
-        <div className="card p-0 overflow-hidden">
+        <div className="space-y-6">
+          {/* History Charts */}
+          {history.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="card">
+                <h3 className="text-sm font-semibold text-surface-800 mb-1">Pareto de Paradas</h3>
+                <p className="text-xs text-surface-400 mb-4">Top motivos por tempo (min)</p>
+                <ParetoChart data={historyByReason} unit=" min" barColor="#f59e0b" />
+              </div>
+              <div className="card">
+                <h3 className="text-sm font-semibold text-surface-800 mb-1">Distribuição por Categoria</h3>
+                <p className="text-xs text-surface-400 mb-4">Proporção do tempo parado</p>
+                <DonutChart
+                  data={historyByCategory}
+                  innerValue={`${historyByCategory.reduce((s, d) => s + d.value, 0)}`}
+                  innerLabel="min total"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* History Table */}
+          <div className="card p-0 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="table-modern">
               <thead>
@@ -172,6 +208,7 @@ export default function Downtimes() {
                 })}
               </tbody>
             </table>
+          </div>
           </div>
         </div>
       )}

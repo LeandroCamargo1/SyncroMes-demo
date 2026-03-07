@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import api from '../services/api';
 import { Recycle, Trash2, Scale, Plus } from 'lucide-react';
+import { DonutChart } from '../components/charts';
 
 const TYPE_LABELS: Record<string, string> = { moido: 'Moído', borra: 'Borra', sucata: 'Sucata' };
 const DEST_LABELS: Record<string, string> = { reprocesso: 'Reprocesso', descarte: 'Descarte', venda: 'Venda' };
@@ -79,6 +80,36 @@ export default function Pmp() {
           );
         })}
       </div>
+
+      {/* Donut Chart — Peso por tipo */}
+      {!loading && summary.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="card">
+            <h3 className="text-sm font-semibold text-surface-800 mb-1">Distribuição por Tipo</h3>
+            <p className="text-xs text-surface-400 mb-4">Peso total (kg) por categoria</p>
+            <DonutChart
+              data={summary.map((s: any) => ({ name: TYPE_LABELS[s.type] || s.type, value: parseFloat(s.total_kg?.toFixed(1)) || 0 }))}
+              colors={['#3b82f6', '#f59e0b', '#ef4444']}
+              innerValue={`${summary.reduce((s: number, x: any) => s + (x.total_kg || 0), 0).toFixed(1)}`}
+              innerLabel="kg total"
+            />
+          </div>
+          <div className="card">
+            <h3 className="text-sm font-semibold text-surface-800 mb-1">Destinos</h3>
+            <p className="text-xs text-surface-400 mb-4">Distribuição por destino do material</p>
+            <DonutChart
+              data={(() => {
+                const m: Record<string, number> = {};
+                entries.forEach((e: any) => { m[DEST_LABELS[e.destination] || e.destination] = (m[DEST_LABELS[e.destination] || e.destination] || 0) + (e.weight_kg || 0); });
+                return Object.entries(m).map(([name, value]) => ({ name, value: parseFloat(value.toFixed(1)) }));
+              })()}
+              colors={['#10b981', '#94a3b8', '#8b5cf6']}
+              innerValue={String(entries.length)}
+              innerLabel="registros"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Formulário */}
       {showForm && (

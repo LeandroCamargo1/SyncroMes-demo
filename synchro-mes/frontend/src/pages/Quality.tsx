@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import api from '../services/api';
 import { ShieldCheck, AlertTriangle, CheckCircle2, XCircle, Filter } from 'lucide-react';
+import { SpcChart, DonutChart } from '../components/charts';
 
 export default function Quality() {
   const [measurements, setMeasurements] = useState<any[]>([]);
@@ -32,6 +33,35 @@ export default function Quality() {
     { key: 'rejected', label: 'Reprovadas', icon: XCircle },
   ];
 
+  // SPC data: build control chart from measurements with nominal/tolerance
+  const spcData = useMemo(() => {
+    const valid = measurements.filter(m => m.nominal_value != null && m.measured_value != null && m.tolerance_upper != null && m.tolerance_lower != null);
+    return valid.map((m, i) => ({
+      index: i + 1,
+      measured: m.measured_value,
+      nominal: m.nominal_value,
+      ucl: m.nominal_value + (m.tolerance_upper ?? 0),
+      lcl: m.nominal_value - Math.abs(m.tolerance_lower ?? 0),
+    }));
+  }, [measurements]);
+
+  // Approval statistics
+  const approvalStats = useMemo(() => {
+    const approved = measurements.filter(m => m.is_approved).length;
+    const rejected = measurements.filter(m => !m.is_approved).length;
+    return { approved, rejected, total: measurements.length };
+  }, [measurements]);
+
+  // Defect types distribution
+  const defectDistribution = useMemo(() => {
+    const map: Record<string, number> = {};
+    measurements.filter(m => !m.is_approved).forEach(m => {
+      const key = m.defect_type || m.dimension_name || 'Outros';
+      map[key] = (map[key] || 0) + 1;
+    });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
+  }, [measurements]);
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="page-header">
@@ -60,7 +90,45 @@ export default function Quality() {
           <p className="text-surface-400 text-sm mt-1">Tente alterar o filtro</p>
         </div>
       ) : (
-        <div className="card p-0 overflow-hidden">
+        <>
+          {/* Quality Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="card lg:col-span-2">
+              <h3 className="text-sm font-semibold text-surface-800 mb-1">Carta de Controle (SPC)</h3>
+              <p className="text-xs text-surface-400 mb-4">Valores medidos vs limites de controle</p>
+              <SpcChart data={spcData} />
+            </div>
+            <div className="card">
+              <h3 className="text-sm font-semibold text-surface-800 mb-1">Taxa de Aprovação</h3>
+              <p className="text-xs text-surface-400 mb-4">Aprovadas vs Reprovadas</p>
+              <DonutChart
+                data={[
+                  { name: 'Aprovadas', value: approvalStats.approved },
+                  { name: 'Reprovadas', value: approvalStats.rejected },
+                ]}
+                colors={['#10b981', '#ef4444']}
+                innerValue={approvalStats.total > 0 ? `${(approvalStats.approved / approvalStats.total * 100).toFixed(1)}%` : '—'}
+                innerLabel="Aprovação"
+                height={200}
+              />
+              {defectDistribution.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-surface-100">
+                  <h4 className="text-xs font-semibold text-surface-600 mb-2 uppercase tracking-wider">Tipos de Defeito</h4>
+                  <div className="space-y-1.5">
+                    {defectDistribution.slice(0, 5).map(d => (
+                      <div key={d.name} className="flex justify-between text-xs">
+                        <span className="text-surface-600 capitalize">{d.name}</span>
+                        <span className="tabular-nums font-semibold text-red-600">{d.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Measurements Table */}
+          <div className="card p-0 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="table-modern">
               <thead>
@@ -105,7 +173,8 @@ export default function Quality() {
               </tbody>
             </table>
           </div>
-        </div>
+          </div>
+        </>
       )}
     </div>
   );
