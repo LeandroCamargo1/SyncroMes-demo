@@ -10,6 +10,7 @@ from app.models.machine import Machine, Mold
 from app.models.user import User
 from app.schemas.machine import MachineRead, MachineUpdate, MoldRead
 from app.services.auth_service import AuthService
+from app.services.event_dispatcher import dispatcher
 
 router = APIRouter()
 
@@ -51,10 +52,14 @@ async def update_machine(
     if not machine:
         raise HTTPException(status_code=404, detail="Máquina não encontrada")
 
+    old_status = machine.status
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(machine, field, value)
     await db.commit()
     await db.refresh(machine)
+    if machine.status != old_status:
+        await dispatcher.machine_status_changed(db, code, str(old_status), str(machine.status), machine_id=machine.id)
+        await db.commit()
     return machine
 
 

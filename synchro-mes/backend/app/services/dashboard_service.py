@@ -2,7 +2,7 @@
 DashboardService — Dados agregados para o painel principal
 """
 from datetime import date, datetime, timezone
-from sqlalchemy import select, func, case
+from sqlalchemy import select, func, case, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.machine import Machine
@@ -16,7 +16,9 @@ class DashboardService:
 
     @staticmethod
     async def get_summary(db: AsyncSession) -> DashboardSummary:
-        """Monta o resumo completo do dashboard."""
+        """Monta o resumo completo do dashboard — otimizado (sem N+1)."""
+
+        today = date.today()
 
         # 1. Máquinas
         machines_result = await db.execute(
@@ -28,8 +30,7 @@ class DashboardService:
         stopped = sum(1 for m in machines if m.status == "stopped")
         maintenance = sum(1 for m in machines if m.status == "maintenance")
 
-        # 2. Produção do dia
-        today = date.today()
+        # 2. Produção do dia (total)
         prod_result = await db.execute(
             select(
                 func.sum(ProductionEntry.quantity_good).label("good"),
@@ -66,29 +67,31 @@ class DashboardService:
         )
         top_dt = dt_result.first()
 
-        # 6. Cards de máquina
+        # 6. Produção por máquina (batch — substitui N+1)
+        per_machine_prod = await db.execute(
+            select(
+                ProductionEntry.machine_id,
+                func.sum(ProductionEntry.quantity_good).label("good"),
+                func.sum(ProductionEntry.quantity_rejected).label("rej"),
+            )
+            .where(func.date(ProductionEntry.timestamp) == today)
+            .group_by(ProductionEntry.machine_id)
+        )
+        prod_by_machine = {r.machine_id: (r.good or 0, r.rej or 0) for r in per_machine_prod}
+
+        # 7. Paradas ativas por máquina (batch — substitui N+1)
+        active_dts = await db.execute(
+            select(ActiveDowntime.machine_id, ActiveDowntime.reason)
+        )
+        dt_by_machine = {}
+        for r in active_dts:
+            if r.machine_id not in dt_by_machine:
+                dt_by_machine[r.machine_id] = r.reason
+
+        # 8. Montar machine_cards sem queries adicionais
         machine_cards = []
         for m in machines:
-            # produção do dia por máquina
-            mc_prod = await db.execute(
-                select(
-                    func.sum(ProductionEntry.quantity_good).label("good"),
-                    func.sum(ProductionEntry.quantity_rejected).label("rej"),
-                ).where(
-                    ProductionEntry.machine_id == m.id,
-                    func.date(ProductionEntry.timestamp) == today,
-                )
-            )
-            mc_row = mc_prod.one()
-
-            # parada ativa
-            active_dt = await db.execute(
-                select(ActiveDowntime.reason).where(
-                    ActiveDowntime.machine_id == m.id
-                ).limit(1)
-            )
-            dt_reason = active_dt.scalar_one_or_none()
-
+            good, rej = prod_by_machine.get(m.id, (0, 0))
             machine_cards.append(MachineCardData(
                 code=m.code,
                 name=m.name,
@@ -98,9 +101,9 @@ class DashboardService:
                 oee=m.efficiency,
                 efficiency=m.efficiency,
                 cycle_time=m.cycle_time_seconds,
-                produced_today=mc_row.good or 0,
-                rejected_today=mc_row.rej or 0,
-                active_downtime_reason=dt_reason,
+                produced_today=good,
+                rejected_today=rej,
+                active_downtime_reason=dt_by_machine.get(m.id),
             ))
 
         return DashboardSummary(

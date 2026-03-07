@@ -54,4 +54,8 @@ async def create_measurement(
     db.add(measurement)
     await db.commit()
     await db.refresh(measurement)
+    if measurement.is_approved is False and measurement.defect_type:
+        from app.services.event_dispatcher import dispatcher
+        await dispatcher.quality_alert(db, body.machine_code, measurement.defect_type, machine_id=data.get("machine_id"))
+        await db.commit()
     return measurement

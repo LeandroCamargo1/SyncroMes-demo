@@ -13,6 +13,7 @@ from app.models.user import User
 from app.schemas.downtime import ActiveDowntimeCreate, ActiveDowntimeRead, DowntimeHistoryRead
 from app.services.auth_service import AuthService
 from app.services.fk_resolver import resolve_machine, resolve_operator_by_name
+from app.services.event_dispatcher import dispatcher
 
 router = APIRouter()
 
@@ -55,6 +56,8 @@ async def start_downtime(
 
     await db.commit()
     await db.refresh(dt)
+    await dispatcher.downtime_started(db, body.machine_code, body.reason, machine_id=machine_id)
+    await db.commit()
     return dt
 
 
@@ -108,6 +111,8 @@ async def stop_downtime(
 
     await db.commit()
     await db.refresh(history)
+    machine_code = history.machine.code if history.machine else "unknown"
+    await dispatcher.downtime_stopped(db, machine_code, round(duration, 1))
     return history
 
 

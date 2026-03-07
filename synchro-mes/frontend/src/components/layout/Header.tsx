@@ -1,6 +1,7 @@
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Menu, LogOut, Bell, Search } from 'lucide-react';
+import { Menu, LogOut, Search } from 'lucide-react';
+import NotificationCenter from './NotificationCenter';
 
 const pageTitles: Record<string, string> = {
   '/': 'Dashboard',
@@ -61,11 +62,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
           <Search className="w-[18px] h-[18px]" />
         </button>
 
-        <button className="p-2.5 hover:bg-surface-100 rounded-xl text-surface-400 
-                          hover:text-surface-600 transition-colors relative">
-          <Bell className="w-[18px] h-[18px]" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-danger rounded-full ring-2 ring-white" />
-        </button>
+        <NotificationCenter />
 
         <div className="w-px h-8 bg-surface-200 mx-1 hidden sm:block" />
 

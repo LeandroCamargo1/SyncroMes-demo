@@ -18,6 +18,7 @@ from app.routers.hierarchy import router as hierarchy_router
 from app.routers.materials import router as materials_router
 from app.routers.maintenance import router as maintenance_router
 from app.routers.kpis import router as kpis_router
+from app.routers.notifications import router as notifications_router
 
 all_routers = [
     (auth_router,          "/api/auth",          ["Auth"]),
@@ -40,4 +41,5 @@ all_routers = [
     (materials_router,     "/api/materials",     ["Materials"]),
     (maintenance_router,   "/api/maintenance",   ["Maintenance"]),
     (kpis_router,          "/api/kpis",          ["KPIs"]),
+    (notifications_router, "/api/notifications", ["Notifications"]),
 ]

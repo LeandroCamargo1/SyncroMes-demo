@@ -198,4 +198,11 @@ async def create_movement(
 
     await db.commit()
     await db.refresh(mov)
+
+    # Check stock alert after movement
+    if material.current_stock < material.min_stock:
+        from app.services.event_dispatcher import dispatcher
+        await dispatcher.stock_below_minimum(db, material.code, material.current_stock, material.min_stock)
+        await db.commit()
+
     return mov

@@ -20,6 +20,7 @@ from app.services.fk_resolver import (
     resolve_machine, resolve_machine_optional, resolve_product,
     resolve_operator_by_name, resolve_order, resolve_mold,
 )
+from app.services.event_dispatcher import dispatcher
 
 router = APIRouter()
 
@@ -53,6 +54,8 @@ async def create_order(
     db.add(order)
     await db.commit()
     await db.refresh(order)
+    await dispatcher.order_created(db, order.order_number, order.product_name or body.product_code)
+    await db.commit()
     return order
 
 
@@ -67,6 +70,7 @@ async def update_order(
     order = result.scalar_one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Ordem não encontrada")
+    old_status = order.status
     update_data = body.model_dump(exclude_unset=True)
     # Resolve FK fields from string codes
     if "machine_code" in update_data:
@@ -77,6 +81,9 @@ async def update_order(
         setattr(order, field, value)
     await db.commit()
     await db.refresh(order)
+    if "status" in body.model_dump(exclude_unset=True) and order.status != old_status:
+        await dispatcher.order_status_changed(db, order.order_number, str(old_status), str(order.status))
+        await db.commit()
     return order
 
 
@@ -148,4 +155,5 @@ async def create_entry(
     db.add(entry)
     await db.commit()
     await db.refresh(entry)
+    await dispatcher.production_entry_created(db, body.machine_code, entry.quantity_good or 0, entry.quantity_rejected or 0)
     return entry

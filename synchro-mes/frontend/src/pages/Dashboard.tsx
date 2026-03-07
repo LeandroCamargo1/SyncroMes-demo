@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
-import { Activity, Zap, CheckCircle, AlertTriangle, Package, XCircle, TrendingUp, RefreshCw } from 'lucide-react';
+import { wsService } from '../services/websocket';
+import { Activity, Zap, CheckCircle, AlertTriangle, Package, XCircle, TrendingUp, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 import MachineGrid from '../components/dashboard/MachineGrid';
 import OeeGauge from '../components/dashboard/OeeGauge';
 
@@ -8,14 +9,10 @@ export default function Dashboard() {
   const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [wsConnected, setWsConnected] = useState(false);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
-    fetchDashboard();
-    const interval = setInterval(fetchDashboard, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const fetchDashboard = async () => {
+  const fetchDashboard = useCallback(async () => {
     try {
       const { data } = await api.get('/dashboard/summary');
       setSummary(data);
@@ -25,7 +22,29 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchDashboard();
+
+    // WebSocket: atualiza dashboard em tempo real quando backend notifica
+    wsService.connect('dashboard');
+    setWsConnected(true);
+
+    const unsubRefresh = wsService.on('dashboard:refresh', () => {
+      fetchDashboard();
+    });
+
+    // Fallback polling a cada 30s
+    pollingRef.current = setInterval(fetchDashboard, 30000);
+
+    return () => {
+      unsubRefresh();
+      wsService.disconnect();
+      setWsConnected(false);
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [fetchDashboard]);
 
   if (loading) {
     return (
@@ -125,8 +144,8 @@ export default function Dashboard() {
             </div>
             {lastUpdate && (
               <span className="text-[10px] text-surface-400 flex items-center gap-1">
-                <RefreshCw className="w-3 h-3" />
-                {lastUpdate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                {wsConnected ? <Wifi className="w-3 h-3 text-emerald-500" /> : <WifiOff className="w-3 h-3 text-surface-300" />}
+                {lastUpdate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
               </span>
             )}
           </div>
