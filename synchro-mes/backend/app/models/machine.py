@@ -7,6 +7,7 @@ from app.database import Base
 from app.models.enums import MachineStatus, MoldStatus
 
 
+
 class Machine(Base):
     __tablename__ = "machines"
 
@@ -22,10 +23,12 @@ class Machine(Base):
     cavities = Column(Integer, default=1)
     efficiency = Column(Float, default=0.0)
     location = Column(String(100), default="Galpão Principal")
+    work_center_id = Column(Integer, ForeignKey("work_centers.id"), nullable=True)
     metadata_extra = Column(JSON, default=dict)
     is_active = Column(Boolean, default=True)
 
     # ── Relationships ─────────────────────────────────────
+    work_center = relationship("WorkCenter", back_populates="machines", lazy="joined")
     production_orders = relationship("ProductionOrder", back_populates="machine", lazy="noload")
     planning_entries = relationship("Planning", back_populates="machine", lazy="noload")
     production_entries = relationship("ProductionEntry", back_populates="machine", lazy="noload")
@@ -41,6 +44,11 @@ class Machine(Base):
     quality_lots = relationship("QualityLot", back_populates="machine", lazy="noload")
     operator_schedules = relationship("OperatorSchedule", back_populates="machine", lazy="noload")
     notifications = relationship("Notification", back_populates="machine", lazy="noload")
+    machine_maintenances = relationship("MachineMaintenance", back_populates="machine", lazy="noload")
+
+    @property
+    def work_center_code(self) -> str | None:
+        return self.work_center.code if self.work_center else None
 
     def __repr__(self):
         return f"<Machine {self.code} status={self.status}>"

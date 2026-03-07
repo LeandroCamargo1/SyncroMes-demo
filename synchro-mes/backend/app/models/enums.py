@@ -145,3 +145,36 @@ class AbsenteeismReason(str, enum.Enum):
     atraso = "atraso"
     ferias = "ferias"
     folga = "folga"
+
+
+# ── Phase 2 · ISA-95 Equipment Hierarchy & Materials ─────────
+
+class MaterialType(str, enum.Enum):
+    resina = "resina"
+    masterbatch = "masterbatch"
+    aditivo = "aditivo"
+    embalagem = "embalagem"
+    inserto = "inserto"
+
+
+class MaterialUnit(str, enum.Enum):
+    kg = "kg"
+    g = "g"
+    un = "un"
+    m = "m"
+    l = "l"
+
+
+class InventoryMovementType(str, enum.Enum):
+    entrada = "entrada"
+    saida = "saida"
+    ajuste = "ajuste"
+    consumo = "consumo"
+    devolucao = "devolucao"
+
+
+class MaintenancePriority(str, enum.Enum):
+    baixa = "baixa"
+    media = "media"
+    alta = "alta"
+    critica = "critica"

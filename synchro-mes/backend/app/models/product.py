@@ -34,6 +34,8 @@ class Product(Base):
     loss_entries = relationship("LossEntry", back_populates="product", lazy="noload")
     pmp_entries = relationship("PmpEntry", back_populates="product", lazy="noload")
     quality_lots = relationship("QualityLot", back_populates="product", lazy="noload")
+    bom_lines = relationship("BomLine", back_populates="product", lazy="noload")
+    process_segments = relationship("ProcessSegment", back_populates="product", lazy="noload")
 
     def __repr__(self):
         return f"<Product {self.code} name={self.name}>"

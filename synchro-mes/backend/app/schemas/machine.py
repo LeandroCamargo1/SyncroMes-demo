@@ -20,6 +20,7 @@ class MachineRead(BaseModel):
     cavities: int
     efficiency: float
     location: str
+    work_center_code: str | None = None
     is_active: bool
 
     model_config = {"from_attributes": True}
