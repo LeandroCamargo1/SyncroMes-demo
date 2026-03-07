@@ -18,6 +18,7 @@ import MachineSetup from './pages/MachineSetup';
 import Tooling from './pages/Tooling';
 import Pcp from './pages/Pcp';
 import DashboardTV from './pages/DashboardTV';
+import SeedFirestore from './pages/SeedFirestore';
 
 export default function App() {
   return (
@@ -42,6 +43,7 @@ export default function App() {
             <Route path="setup" element={<MachineSetup />} />
             <Route path="tooling" element={<Tooling />} />
             <Route path="pcp" element={<Pcp />} />
+            <Route path="seed" element={<SeedFirestore />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

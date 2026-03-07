@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Package, ShieldCheck, AlertOctagon,
   CalendarDays, Factory, X, ChevronRight, ClipboardList,
   PlayCircle, BarChart3, Recycle, History, FileText,
-  Database, Users, Settings, Wrench, Megaphone,
+  Database, Users, Settings, Wrench, Megaphone, Flame,
 } from 'lucide-react';
 
 interface NavItem {
@@ -55,6 +55,7 @@ const navSections: NavSection[] = [
       { to: '/reports', label: 'Relatórios', icon: FileText, perm: 'relatorios' },
       { to: '/history', label: 'Histórico', icon: History, perm: 'admin' },
       { to: '/admin', label: 'Admin Dados', icon: Database, perm: 'admin' },
+      { to: '/seed', label: 'Seed Firebase', icon: Flame, perm: 'admin' },
     ],
   },
 ];
