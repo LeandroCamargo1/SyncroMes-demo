@@ -1,0 +1,25 @@
+# FastAPI + Server
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# Database (read-only from main DB)
+sqlalchemy==2.0.36
+asyncpg==0.30.0
+aiosqlite==0.20.0
+
+# Validation
+pydantic==2.10.4
+pydantic-settings==2.7.1
+
+# ML / Data Science
+scikit-learn==1.6.1
+numpy==2.2.3
+pandas==2.2.3
+joblib==1.4.2
+
+# Deep Learning (lightweight — CPU only)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.6.0+cpu
+
+# Utils
+python-dateutil==2.9.0

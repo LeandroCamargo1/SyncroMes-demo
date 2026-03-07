@@ -1,0 +1,147 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-surface-200;
+  }
+  body {
+    @apply bg-surface-50 text-surface-900 antialiased;
+  }
+  ::-webkit-scrollbar {
+    @apply w-1.5;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-surface-300 rounded-full hover:bg-surface-400;
+  }
+}
+
+@layer components {
+  /* ─── Cards ─── */
+  .card {
+    @apply bg-white rounded-2xl shadow-card border border-surface-200/60 p-5
+           transition-all duration-300 ease-out;
+  }
+  .card-hover {
+    @apply card hover:shadow-card-hover hover:-translate-y-0.5;
+  }
+  .card-glass {
+    @apply bg-white/70 backdrop-blur-md rounded-2xl shadow-glass border border-white/40 p-5;
+  }
+
+  /* ─── Buttons ─── */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 font-semibold text-sm
+           px-4 py-2.5 rounded-xl transition-all duration-200 ease-out
+           focus:outline-none focus:ring-2 focus:ring-offset-2
+           active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply btn bg-gradient-to-r from-primary-600 to-primary-500
+           text-white shadow-md shadow-primary-500/25
+           hover:shadow-lg hover:shadow-primary-500/30 hover:-translate-y-0.5
+           focus:ring-primary-500;
+  }
+  .btn-secondary {
+    @apply btn bg-surface-100 text-surface-700 border border-surface-200
+           hover:bg-surface-200 hover:text-surface-900
+           focus:ring-surface-400;
+  }
+  .btn-danger {
+    @apply btn bg-gradient-to-r from-danger to-red-500
+           text-white shadow-md shadow-danger/25
+           hover:shadow-lg hover:shadow-danger/30 hover:-translate-y-0.5
+           focus:ring-danger;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-surface-500
+           hover:bg-surface-100 hover:text-surface-900;
+  }
+
+  /* ─── Inputs ─── */
+  .input-field {
+    @apply w-full px-4 py-2.5 bg-surface-50 border border-surface-200
+           rounded-xl text-sm text-surface-900 placeholder-surface-400
+           focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500
+           focus:bg-white outline-none transition-all duration-200;
+  }
+
+  /* ─── Badges ─── */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold
+           tracking-wide uppercase;
+  }
+  .badge-running {
+    @apply bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200;
+  }
+  .badge-stopped {
+    @apply bg-red-50 text-red-700 ring-1 ring-red-200;
+  }
+  .badge-maintenance {
+    @apply bg-amber-50 text-amber-700 ring-1 ring-amber-200;
+  }
+  .badge-setup {
+    @apply bg-blue-50 text-blue-700 ring-1 ring-blue-200;
+  }
+
+  /* ─── Tables ─── */
+  .table-modern {
+    @apply w-full text-sm text-left;
+  }
+  .table-modern thead {
+    @apply bg-surface-50/80 backdrop-blur-sm sticky top-0;
+  }
+  .table-modern thead th {
+    @apply px-4 py-3.5 text-xs font-semibold text-surface-500 uppercase tracking-wider
+           border-b border-surface-200;
+  }
+  .table-modern tbody tr {
+    @apply border-b border-surface-100 transition-colors duration-150;
+  }
+  .table-modern tbody tr:hover {
+    @apply bg-primary-50/30;
+  }
+  .table-modern tbody td {
+    @apply px-4 py-3.5;
+  }
+
+  /* ─── Tab bar ─── */
+  .tab-bar {
+    @apply flex gap-1 p-1 bg-surface-100 rounded-xl;
+  }
+  .tab-item {
+    @apply px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200
+           text-surface-500 hover:text-surface-700;
+  }
+  .tab-item-active {
+    @apply tab-item bg-white text-surface-900 shadow-sm;
+  }
+
+  /* ─── Page header ─── */
+  .page-header {
+    @apply mb-8;
+  }
+  .page-title {
+    @apply text-2xl font-bold text-surface-900 tracking-tight;
+  }
+  .page-subtitle {
+    @apply text-surface-500 text-sm mt-1;
+  }
+
+  /* ─── Loading ─── */
+  .spinner {
+    @apply animate-spin rounded-full border-2 border-surface-200 border-t-primary-500;
+  }
+
+  /* ─── Status dot ─── */
+  .status-dot {
+    @apply w-2 h-2 rounded-full;
+  }
+  .status-dot-animated {
+    @apply status-dot animate-pulse;
+  }
+}
