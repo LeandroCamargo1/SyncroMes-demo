@@ -11,6 +11,7 @@ from app.models.pcp import PcpMessage
 from app.models.user import User
 from app.schemas.pcp import PcpMessageCreate, PcpMessageRead
 from app.services.auth_service import AuthService
+from app.services.fk_resolver import resolve_machine_optional
 
 router = APIRouter()
 
@@ -29,7 +30,7 @@ async def list_messages(
     if priority is not None:
         query = query.where(PcpMessage.priority >= priority)
     result = await db.execute(query)
-    return result.scalars().all()
+    return result.scalars().unique().all()
 
 
 @router.post("/messages", response_model=PcpMessageRead, status_code=201)
@@ -38,7 +39,9 @@ async def create_message(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(AuthService.require_role("admin", "pcp")),
 ):
-    msg = PcpMessage(**body.model_dump())
+    data = body.model_dump(exclude={"target_machine"})
+    data["target_machine_id"] = await resolve_machine_optional(db, body.target_machine)
+    msg = PcpMessage(**data)
     db.add(msg)
     await db.commit()
     await db.refresh(msg)
@@ -69,10 +72,10 @@ async def production_queue(
     from app.models.production import ProductionOrder
     result = await db.execute(
         select(ProductionOrder)
-        .where(ProductionOrder.status.in_(["planejada", "em_producao"]))
+        .where(ProductionOrder.status.in_(["planned", "in_progress"]))
         .order_by(ProductionOrder.priority.desc(), ProductionOrder.start_date.asc())
     )
-    orders = result.scalars().all()
+    orders = result.scalars().unique().all()
     return [
         {
             "id": o.id,

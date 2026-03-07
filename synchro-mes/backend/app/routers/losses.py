@@ -7,9 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.loss import LossEntry
+from app.models.machine import Machine
 from app.models.user import User
 from app.schemas.loss import LossEntryCreate, LossEntryRead
 from app.services.auth_service import AuthService
+from app.services.fk_resolver import (
+    resolve_machine, resolve_product, resolve_operator_by_name, resolve_order,
+)
 
 router = APIRouter()
 
@@ -24,11 +28,11 @@ async def list_losses(
 ):
     query = select(LossEntry).order_by(LossEntry.timestamp.desc()).limit(limit)
     if machine_code:
-        query = query.where(LossEntry.machine_code == machine_code)
+        query = query.join(LossEntry.machine).where(Machine.code == machine_code)
     if category:
         query = query.where(LossEntry.category == category)
     result = await db.execute(query)
-    return result.scalars().all()
+    return result.scalars().unique().all()
 
 
 @router.post("/", response_model=LossEntryRead, status_code=201)
@@ -37,7 +41,12 @@ async def create_loss(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(AuthService.require_role("admin", "supervisor", "operador")),
 ):
-    entry = LossEntry(**body.model_dump())
+    data = body.model_dump(exclude={"machine_code", "product_code", "order_number", "operator_name"})
+    data["machine_id"] = await resolve_machine(db, body.machine_code)
+    data["product_id"] = await resolve_product(db, body.product_code)
+    data["order_id"] = await resolve_order(db, body.order_number)
+    data["operator_id"] = await resolve_operator_by_name(db, body.operator_name)
+    entry = LossEntry(**data)
     db.add(entry)
     await db.commit()
     await db.refresh(entry)

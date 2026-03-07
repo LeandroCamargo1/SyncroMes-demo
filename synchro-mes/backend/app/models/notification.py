@@ -1,25 +1,31 @@
 """
 Model: Notification — Notificações do sistema
 """
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
-from sqlalchemy.sql import func
+from sqlalchemy import Column, Integer, String, Boolean, Enum, ForeignKey
+from sqlalchemy.orm import relationship
 from app.database import Base
+from app.models.enums import NotificationType
 
 
 class Notification(Base):
     __tablename__ = "notifications"
 
-    id = Column(Integer, primary_key=True, index=True)
     title = Column(String(200), nullable=False)
     message = Column(String(500), nullable=False)
-    type = Column(String(30), default="info")    # info, warning, error, success
-    target_role = Column(String(50), nullable=True)  # admin, supervisor, null=todos
-    target_user_id = Column(Integer, nullable=True)
+    type = Column(Enum(NotificationType), default=NotificationType.info, nullable=False)
+    target_role = Column(String(50), nullable=True)
+    target_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     is_read = Column(Boolean, default=False)
-    machine_code = Column(String(20), nullable=True)
+    machine_id = Column(Integer, ForeignKey("machines.id"), nullable=True)
     link = Column(String(300), nullable=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    # ── Relationships ─────────────────────────────────────
+    user = relationship("User", back_populates="notifications", lazy="joined")
+    machine = relationship("Machine", back_populates="notifications", lazy="joined")
+
+    @property
+    def machine_code(self) -> str | None:
+        return self.machine.code if self.machine else None
 
     def __repr__(self):
         return f"<Notification {self.title} type={self.type}>"

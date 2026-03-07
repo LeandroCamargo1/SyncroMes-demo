@@ -7,9 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.pmp import PmpEntry
+from app.models.machine import Machine
 from app.models.user import User
 from app.schemas.pmp import PmpEntryCreate, PmpEntryRead
 from app.services.auth_service import AuthService
+from app.services.fk_resolver import (
+    resolve_machine_optional, resolve_product_optional, resolve_operator_by_name,
+)
 
 router = APIRouter()
 
@@ -26,9 +30,9 @@ async def list_pmp(
     if pmp_type:
         query = query.where(PmpEntry.type == pmp_type)
     if machine_code:
-        query = query.where(PmpEntry.machine_code == machine_code)
+        query = query.join(PmpEntry.machine).where(Machine.code == machine_code)
     result = await db.execute(query)
-    return result.scalars().all()
+    return result.scalars().unique().all()
 
 
 @router.post("/", response_model=PmpEntryRead, status_code=201)
@@ -37,7 +41,11 @@ async def create_pmp(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(AuthService.require_role("admin", "supervisor", "operador")),
 ):
-    entry = PmpEntry(**body.model_dump())
+    data = body.model_dump(exclude={"machine_code", "product_code", "operator_name"})
+    data["machine_id"] = await resolve_machine_optional(db, body.machine_code)
+    data["product_id"] = await resolve_product_optional(db, body.product_code)
+    data["operator_id"] = await resolve_operator_by_name(db, body.operator_name)
+    entry = PmpEntry(**data)
     db.add(entry)
     await db.commit()
     await db.refresh(entry)

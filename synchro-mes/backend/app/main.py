@@ -11,6 +11,7 @@ from app.database import init_db, AsyncSessionLocal
 from app.routers import all_routers
 from app.seed.seed_data import seed_all
 from app.services.websocket_manager import ws_manager
+from app.services.audit_middleware import AuditMiddleware
 
 settings = get_settings()
 
@@ -46,6 +47,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Audit Middleware ──────────────────────────────────────────
+app.add_middleware(AuditMiddleware)
 
 # ── Routers ───────────────────────────────────────────────────
 for router, prefix, tags in all_routers:

@@ -1,6 +1,8 @@
 """
 Synchro MES — Conexão assíncrona com banco de dados (SQLAlchemy 2.0 async)
 """
+from datetime import datetime, timezone
+from sqlalchemy import Column, Integer, DateTime
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import StaticPool
@@ -29,9 +31,16 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 class Base(DeclarativeBase):
-    """Classe-base para todos os models."""
-    pass
+    """Classe-base para todos os models — inclui id + timestamps padronizados."""
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=True)
 
 
 async def get_db() -> AsyncSession:

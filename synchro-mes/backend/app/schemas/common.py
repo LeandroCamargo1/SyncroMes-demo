@@ -25,7 +25,6 @@ class ProductRead(BaseModel):
     weight_grams: float | None = None
     material: str | None = None
     color: str | None = None
-    mold_code: str | None = None
     cycle_time_ideal: float | None = None
     cavities: int
     category: str | None = None

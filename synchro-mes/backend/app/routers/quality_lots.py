@@ -3,14 +3,18 @@ Router: Quality Lots — Triagem e quarentena de lotes
 """
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.quality_lot import QualityLot
+from app.models.quality import QualityMeasurement
 from app.models.user import User
 from app.schemas.quality_lot import QualityLotCreate, QualityLotUpdate, QualityLotRead
 from app.services.auth_service import AuthService
+from app.services.fk_resolver import (
+    resolve_machine, resolve_product, resolve_operator_by_name, resolve_order,
+)
 
 router = APIRouter()
 
@@ -26,7 +30,7 @@ async def list_lots(
     if status:
         query = query.where(QualityLot.status == status)
     result = await db.execute(query)
-    return result.scalars().all()
+    return result.scalars().unique().all()
 
 
 @router.post("/lots", response_model=QualityLotRead, status_code=201)
@@ -35,7 +39,12 @@ async def create_lot(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(AuthService.require_role("admin", "qualidade")),
 ):
-    lot = QualityLot(**body.model_dump())
+    data = body.model_dump(exclude={"machine_code", "product_code", "order_number", "operator_name"})
+    data["machine_id"] = await resolve_machine(db, body.machine_code)
+    data["product_id"] = await resolve_product(db, body.product_code)
+    data["order_id"] = await resolve_order(db, body.order_number)
+    data["operator_id"] = await resolve_operator_by_name(db, body.operator_name)
+    lot = QualityLot(**data)
     db.add(lot)
     await db.commit()
     await db.refresh(lot)
@@ -86,13 +95,9 @@ async def quality_reports(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(AuthService.get_current_user),
 ):
-    """Relatório agregado de qualidade."""
-    from app.models.quality import QualityMeasurement
-    from sqlalchemy import func
-
     total = await db.execute(select(func.count()).select_from(QualityMeasurement))
     approved = await db.execute(
-        select(func.count()).select_from(QualityMeasurement).where(QualityMeasurement.approved == True)
+        select(func.count()).select_from(QualityMeasurement).where(QualityMeasurement.is_approved == True)
     )
     total_val = total.scalar() or 0
     approved_val = approved.scalar() or 0

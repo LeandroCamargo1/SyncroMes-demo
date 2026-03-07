@@ -1,16 +1,18 @@
 """
 Model: OeeHistory — Histórico de OEE por máquina/turno/dia
 """
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime
-from sqlalchemy.sql import func
+from sqlalchemy import Column, Integer, String, Float, Date, ForeignKey, Index
+from sqlalchemy.orm import relationship
 from app.database import Base
 
 
 class OeeHistory(Base):
     __tablename__ = "oee_history"
+    __table_args__ = (
+        Index("ix_oee_machine_date_shift", "machine_id", "date", "shift", unique=True),
+    )
 
-    id = Column(Integer, primary_key=True, index=True)
-    machine_code = Column(String(20), nullable=False, index=True)
+    machine_id = Column(Integer, ForeignKey("machines.id"), nullable=False, index=True)
     date = Column(Date, nullable=False, index=True)
     shift = Column(String(20), nullable=True)
 
@@ -21,7 +23,7 @@ class OeeHistory(Base):
     oee = Column(Float, nullable=False, default=0.0)
 
     # Dados brutos para cálculo
-    planned_time_minutes = Column(Float, default=480.0)     # 8h turno
+    planned_time_minutes = Column(Float, default=480.0)
     running_time_minutes = Column(Float, default=0.0)
     downtime_minutes = Column(Float, default=0.0)
     total_produced = Column(Integer, default=0)
@@ -30,7 +32,12 @@ class OeeHistory(Base):
     ideal_cycle_seconds = Column(Float, nullable=True)
     actual_cycle_seconds = Column(Float, nullable=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    # ── Relationships ─────────────────────────────────────
+    machine = relationship("Machine", back_populates="oee_history", lazy="joined")
+
+    @property
+    def machine_code(self) -> str | None:
+        return self.machine.code if self.machine else None
 
     def __repr__(self):
-        return f"<OeeHistory {self.machine_code} {self.date} oee={self.oee}%>"
+        return f"<OeeHistory machine_id={self.machine_id} {self.date} oee={self.oee}%>"

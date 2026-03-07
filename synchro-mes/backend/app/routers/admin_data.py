@@ -24,7 +24,7 @@ async def list_products(
     result = await db.execute(select(Product).order_by(Product.code))
     products = result.scalars().all()
     return [
-        {"id": p.id, "code": p.code, "description": p.description, "weight": p.weight, "cycle_time": p.cycle_time}
+        {"id": p.id, "code": p.code, "name": p.name, "weight_grams": p.weight_grams, "cycle_time_ideal": p.cycle_time_ideal}
         for p in products
     ]
 
@@ -37,9 +37,10 @@ async def create_product(
 ):
     product = Product(
         code=body["code"],
-        description=body.get("description", ""),
-        weight=body.get("weight"),
-        cycle_time=body.get("cycle_time"),
+        name=body.get("name", body.get("description", "")),
+        description=body.get("description"),
+        weight_grams=body.get("weight_grams"),
+        cycle_time_ideal=body.get("cycle_time_ideal"),
     )
     db.add(product)
     await db.commit()
@@ -56,7 +57,7 @@ async def list_operators(
     result = await db.execute(select(Operator).order_by(Operator.name))
     operators = result.scalars().all()
     return [
-        {"id": o.id, "registration": o.registration, "name": o.name, "shift": o.shift, "active": o.active}
+        {"id": o.id, "registration": o.registration, "name": o.name, "shift": o.shift, "is_active": o.is_active}
         for o in operators
     ]
 
@@ -71,7 +72,7 @@ async def create_operator(
         registration=body["registration"],
         name=body["name"],
         shift=body.get("shift", "A"),
-        active=body.get("active", True),
+        is_active=body.get("is_active", True),
     )
     db.add(operator)
     await db.commit()
@@ -112,11 +113,11 @@ async def list_molds_admin(
         {
             "id": m.id,
             "code": m.code,
-            "description": m.description,
+            "name": m.name,
             "cavities": m.cavities,
-            "cycle_time": m.cycle_time,
-            "current_shots": m.current_shots,
-            "max_shots": m.max_shots,
+            "cycle_time_ideal": m.cycle_time_ideal,
+            "total_cycles": m.total_cycles,
+            "max_cycles": m.max_cycles,
             "status": m.status,
         }
         for m in molds

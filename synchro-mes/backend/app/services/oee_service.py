@@ -6,6 +6,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.oee import OeeHistory
+from app.models.machine import Machine
 from app.models.production import ProductionEntry
 from app.models.downtime import DowntimeHistory
 from app.schemas.oee import OeeSummary
@@ -23,14 +24,14 @@ class OeeService:
     ) -> list[OeeHistory]:
         query = select(OeeHistory).order_by(OeeHistory.date.desc())
         if machine_code:
-            query = query.where(OeeHistory.machine_code == machine_code)
+            query = query.join(OeeHistory.machine).where(Machine.code == machine_code)
         if start_date:
             query = query.where(OeeHistory.date >= start_date)
         if end_date:
             query = query.where(OeeHistory.date <= end_date)
         query = query.limit(limit)
         result = await db.execute(query)
-        return result.scalars().all()
+        return result.scalars().unique().all()
 
     @staticmethod
     async def get_summary_by_machine(
@@ -38,12 +39,11 @@ class OeeService:
         machine_code: str,
         target_date: date | None = None,
     ) -> OeeSummary:
-        """Retorna resumo OEE de uma máquina para uma data."""
         d = target_date or date.today()
         result = await db.execute(
             select(OeeHistory)
-            .where(OeeHistory.machine_code == machine_code)
-            .where(OeeHistory.date == d)
+            .join(OeeHistory.machine)
+            .where(Machine.code == machine_code, OeeHistory.date == d)
             .limit(1)
         )
         record = result.scalar_one_or_none()

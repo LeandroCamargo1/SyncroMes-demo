@@ -75,7 +75,7 @@ class DashboardService:
                     func.sum(ProductionEntry.quantity_good).label("good"),
                     func.sum(ProductionEntry.quantity_rejected).label("rej"),
                 ).where(
-                    ProductionEntry.machine_code == m.code,
+                    ProductionEntry.machine_id == m.id,
                     func.date(ProductionEntry.timestamp) == today,
                 )
             )
@@ -84,7 +84,7 @@ class DashboardService:
             # parada ativa
             active_dt = await db.execute(
                 select(ActiveDowntime.reason).where(
-                    ActiveDowntime.machine_code == m.code
+                    ActiveDowntime.machine_id == m.id
                 ).limit(1)
             )
             dt_reason = active_dt.scalar_one_or_none()

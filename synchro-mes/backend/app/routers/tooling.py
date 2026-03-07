@@ -14,6 +14,7 @@ from app.schemas.tooling import (
     MoldMaintenanceCreate, MoldMaintenanceFinish, MoldMaintenanceRead, MoldUpdate,
 )
 from app.services.auth_service import AuthService
+from app.services.fk_resolver import resolve_mold
 
 router = APIRouter()
 
@@ -30,11 +31,11 @@ async def list_molds(
         {
             "id": m.id,
             "code": m.code,
-            "description": m.description,
+            "name": m.name,
             "cavities": m.cavities,
-            "cycle_time": m.cycle_time,
-            "current_shots": m.current_shots,
-            "max_shots": m.max_shots,
+            "cycle_time_ideal": m.cycle_time_ideal,
+            "total_cycles": m.total_cycles,
+            "max_cycles": m.max_cycles,
             "status": m.status,
         }
         for m in molds
@@ -71,11 +72,11 @@ async def list_maintenance(
 ):
     query = select(MoldMaintenance).order_by(MoldMaintenance.created_at.desc()).limit(limit)
     if mold_code:
-        query = query.where(MoldMaintenance.mold_code == mold_code)
+        query = query.join(MoldMaintenance.mold).where(Mold.code == mold_code)
     if status:
         query = query.where(MoldMaintenance.status == status)
     result = await db.execute(query)
-    return result.scalars().all()
+    return result.scalars().unique().all()
 
 
 @router.post("/maintenance", response_model=MoldMaintenanceRead, status_code=201)
@@ -84,7 +85,10 @@ async def create_maintenance(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(AuthService.require_role("admin", "supervisor")),
 ):
-    entry = MoldMaintenance(**body.model_dump())
+    mold_id = await resolve_mold(db, body.mold_code)
+    data = body.model_dump(exclude={"mold_code"})
+    data["mold_id"] = mold_id
+    entry = MoldMaintenance(**data)
     db.add(entry)
     await db.commit()
     await db.refresh(entry)
@@ -104,7 +108,9 @@ async def finish_maintenance(
         raise HTTPException(status_code=404, detail="Manutenção não encontrada")
 
     entry.status = "concluida"
-    entry.duration_hours = body.duration_hours
+    if body.end_time:
+        entry.end_time = body.end_time
+        entry.duration_hours = round((body.end_time - entry.start_time).total_seconds() / 3600, 1)
     if body.cost is not None:
         entry.cost = body.cost
     if body.parts_replaced:
@@ -121,21 +127,21 @@ async def mold_alerts(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(AuthService.get_current_user),
 ):
-    """Alertas: moldes próximos do limite de batidas e manutenções pendentes."""
+    """Alertas: moldes próximos do limite de ciclos e manutenções pendentes."""
     result = await db.execute(select(Mold))
     molds = result.scalars().all()
 
     alerts = []
     for m in molds:
-        if m.max_shots and m.current_shots:
-            ratio = m.current_shots / m.max_shots
+        if m.max_cycles and m.total_cycles:
+            ratio = m.total_cycles / m.max_cycles
             if ratio >= 0.9:
                 alerts.append({
-                    "type": "shots_limit",
+                    "type": "cycles_limit",
                     "severity": "critical" if ratio >= 1.0 else "warning",
                     "mold_code": m.code,
-                    "current_shots": m.current_shots,
-                    "max_shots": m.max_shots,
+                    "total_cycles": m.total_cycles,
+                    "max_cycles": m.max_cycles,
                     "percentage": round(ratio * 100, 1),
                 })
 

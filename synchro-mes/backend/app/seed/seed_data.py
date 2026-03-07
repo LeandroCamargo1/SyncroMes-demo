@@ -1,5 +1,9 @@
 """
-Seed — Popula o banco com dados fictícios para demonstração
+Seed — Popula o banco com dados fictícios para demonstração.
+
+Fase 1 ISA-95: Todas as entidades usam FK integer IDs.
+Entidades-pai são inseridas primeiro, flush para obter IDs,
+e então entidades-filhas recebem os IDs via lookup dicts.
 """
 import random
 from datetime import date, datetime, timedelta, timezone
@@ -33,25 +37,34 @@ async def seed_all(db: AsyncSession):
         return
 
     print("[SEED] Populando banco com dados fictícios...")
+
+    # ── Fase 1: entidades-pai (sem dependências FK) ──────────
     await _seed_users(db)
-    await _seed_machines(db)
-    await _seed_products(db)
-    await _seed_molds(db)
-    await _seed_operators(db)
-    await _seed_production_orders(db)
-    await _seed_planning(db)
-    await _seed_production_entries(db)
-    await _seed_downtimes(db)
-    await _seed_oee_history(db)
-    await _seed_quality(db)
-    await _seed_notifications(db)
-    await _seed_losses(db)
-    await _seed_setups(db)
-    await _seed_pmp(db)
-    await _seed_quality_lots(db)
-    await _seed_mold_maintenance(db)
-    await _seed_pcp_messages(db)
-    await _seed_leadership(db)
+    machine_ids = await _seed_machines(db)
+    product_ids = await _seed_products(db)
+    op_by_name, op_by_reg = await _seed_operators(db)
+
+    # ── Fase 2: dependem de Fase 1 ──────────────────────────
+    mold_ids = await _seed_molds(db, product_ids)
+
+    # ── Fase 3: orders (dependem de products, machines) ─────
+    order_ids = await _seed_production_orders(db, product_ids, machine_ids)
+
+    # ── Fase 4: todas as demais entidades ────────────────────
+    await _seed_planning(db, machine_ids, product_ids)
+    await _seed_production_entries(db, machine_ids, product_ids, op_by_name)
+    await _seed_downtimes(db, machine_ids, op_by_name)
+    await _seed_oee_history(db, machine_ids)
+    await _seed_quality(db, machine_ids, product_ids)
+    await _seed_notifications(db, machine_ids)
+    await _seed_losses(db, machine_ids, product_ids, order_ids)
+    await _seed_setups(db, machine_ids, op_by_name)
+    await _seed_pmp(db, machine_ids, op_by_name)
+    await _seed_quality_lots(db, machine_ids, product_ids, order_ids)
+    await _seed_mold_maintenance(db, mold_ids)
+    await _seed_pcp_messages(db, machine_ids)
+    await _seed_leadership(db, op_by_reg, op_by_name, machine_ids)
+
     await db.commit()
     print("[SEED] Concluído — dados fictícios inseridos.")
 
@@ -79,28 +92,38 @@ async def _seed_users(db: AsyncSession):
             role=u["role"], avatar_initials=u["initials"],
             custom_claims={"role": u["role"], "permissions": perms_map[u["role"]]},
         ))
+    await db.flush()
 
 
 # ── Machines ──────────────────────────────────────────────────
-async def _seed_machines(db: AsyncSession):
-    statuses = ["running", "running", "running", "running", "stopped", "running", "maintenance", "running", "stopped", "running"]
-    products = ["TFT-28", "FR-500", "PF-22G", "CV-110", None, "BR-45", None, "TFT-28", None, "PL-80"]
-    operators = ["Roberto Silva", "Ana Costa", "Pedro Santos", "Maria Oliveira", None, "João Lima", None, "Carlos Ferreira", None, "Luiza Souza"]
+async def _seed_machines(db: AsyncSession) -> dict[str, int]:
+    """Retorna {code: id}."""
+    statuses = ["running", "running", "running", "running", "stopped",
+                "running", "maintenance", "running", "stopped", "running"]
+    products = ["TFT-28", "FR-500", "PF-22G", "CV-110", None,
+                "BR-45", None, "TFT-28", None, "PL-80"]
+    operators = ["Roberto Silva", "Ana Costa", "Pedro Santos", "Maria Oliveira",
+                 None, "João Lima", None, "Carlos Ferreira", None, "Luiza Souza"]
+    machines = []
     for i in range(1, 11):
-        code = f"INJ-{i:02d}"
-        db.add(Machine(
-            code=code, name=f"Injetora {i:02d}", type="injetora",
+        m = Machine(
+            code=f"INJ-{i:02d}", name=f"Injetora {i:02d}", type="injetora",
             tonnage=random.choice([150, 250, 350, 450, 550, 650]),
             status=statuses[i - 1], current_product=products[i - 1],
             current_operator=operators[i - 1],
             cycle_time_seconds=random.uniform(18, 45),
             cavities=random.choice([1, 2, 4, 6, 8]),
             efficiency=random.uniform(65, 95),
-        ))
+        )
+        db.add(m)
+        machines.append(m)
+    await db.flush()
+    return {m.code: m.id for m in machines}
 
 
 # ── Products ──────────────────────────────────────────────────
-async def _seed_products(db: AsyncSession):
+async def _seed_products(db: AsyncSession) -> dict[str, int]:
+    """Retorna {code: id}."""
     prods = [
         ("TFT-28", "Tampa Flip-Top 28mm", 4.2, "PP", "branco"),
         ("FR-500", "Frasco 500ml", 32.5, "PET", "transparente"),
@@ -115,18 +138,24 @@ async def _seed_products(db: AsyncSession):
         ("GR-25", "Grade Retangular 25L", 380.0, "PEAD", "verde"),
         ("TP-500", "Tampa Press-On 500", 12.0, "PP", "vermelho"),
     ]
+    products = []
     for code, name, weight, material, color in prods:
-        db.add(Product(
+        p = Product(
             code=code, name=name, weight_grams=weight,
             material=material, color=color,
             cycle_time_ideal=random.uniform(15, 40),
             cavities=random.choice([1, 2, 4]),
-        ))
+        )
+        db.add(p)
+        products.append(p)
+    await db.flush()
+    return {p.code: p.id for p in products}
 
 
 # ── Molds ─────────────────────────────────────────────────────
-async def _seed_molds(db: AsyncSession):
-    molds = [
+async def _seed_molds(db: AsyncSession, product_ids: dict[str, int]) -> dict[str, int]:
+    """Retorna {code: id}."""
+    molds_data = [
         ("MLD-001", "Molde Tampa FT 28", 4, "TFT-28", 18.5),
         ("MLD-002", "Molde Frasco 500", 1, "FR-500", 35.0),
         ("MLD-003", "Molde Preforma 22g", 8, "PF-22G", 12.0),
@@ -134,17 +163,24 @@ async def _seed_molds(db: AsyncSession):
         ("MLD-005", "Molde Bucha R45", 2, "BR-45", 22.0),
         ("MLD-006", "Molde Pallet 80", 1, "PL-80", 90.0),
     ]
-    for code, name, cav, prod, cycle in molds:
-        db.add(Mold(
+    molds = []
+    for code, name, cav, prod_code, cycle in molds_data:
+        m = Mold(
             code=code, name=name, cavities=cav,
-            product_code=prod, cycle_time_ideal=cycle,
+            product_id=product_ids[prod_code],
+            cycle_time_ideal=cycle,
             total_cycles=random.randint(10000, 500000),
             status=random.choice(["disponivel", "em_uso"]),
-        ))
+        )
+        db.add(m)
+        molds.append(m)
+    await db.flush()
+    return {m.code: m.id for m in molds}
 
 
 # ── Operators ────────────────────────────────────────────────
-async def _seed_operators(db: AsyncSession):
+async def _seed_operators(db: AsyncSession) -> tuple[dict[str, int], dict[str, int]]:
+    """Retorna (name->id, registration->id)."""
     names = [
         ("OP-001", "Roberto Silva", "A"), ("OP-002", "Ana Costa", "A"),
         ("OP-003", "Pedro Santos", "A"), ("OP-004", "Maria Oliveira", "B"),
@@ -155,55 +191,79 @@ async def _seed_operators(db: AsyncSession):
         ("OP-013", "Juliana Pires", "A"), ("OP-014", "Marcos Ribeiro", "B"),
         ("OP-015", "Vanessa Lima", "C"),
     ]
+    ops = []
     for reg, name, shift in names:
-        db.add(Operator(
+        o = Operator(
             registration=reg, name=name, shift=shift,
-            skills=[f"INJ-{random.randint(1,10):02d}" for _ in range(random.randint(2, 5))],
-        ))
+            skills=[f"INJ-{random.randint(1, 10):02d}" for _ in range(random.randint(2, 5))],
+        )
+        db.add(o)
+        ops.append(o)
+    await db.flush()
+    by_name = {o.name: o.id for o in ops}
+    by_reg = {o.registration: o.id for o in ops}
+    return by_name, by_reg
 
 
 # ── Production Orders ────────────────────────────────────────
-async def _seed_production_orders(db: AsyncSession):
+async def _seed_production_orders(
+    db: AsyncSession, product_ids: dict[str, int], machine_ids: dict[str, int]
+) -> dict[str, int]:
+    """Retorna {order_number: id}."""
     statuses = ["in_progress", "in_progress", "planned", "planned", "completed",
-                "in_progress", "planned", "completed", "in_progress", "planned", "planned", "completed"]
-    products = ["TFT-28", "FR-500", "PF-22G", "CV-110", "BR-45", "PL-80",
-                "CX-200", "TB-12", "RG-30", "FD-60", "GR-25", "TP-500"]
-    names = ["Tampa Flip-Top 28mm", "Frasco 500ml", "Preforma 22g", "Conector Veicular 110",
-             "Bucha Redonda 45mm", "Pallet Liso 80x80", "Caixa Organizadora 200L", "Tubete 12mm",
-             "Rótulo Garra 30mm", "Flange Diâmetro 60", "Grade Retangular 25L", "Tampa Press-On 500"]
-    clients = ["AutoParts Ltda", "Embala Tudo", "PetBrasil S.A.", "VeiculTech", "Plásticos Unidos",
-               "LogPack", "CasaOrg", "TuboFlex", "RotuloPro", "TechFlange", "AgriPlast", "TampaBrasil"]
+                "in_progress", "planned", "completed", "in_progress", "planned",
+                "planned", "completed"]
+    product_codes = ["TFT-28", "FR-500", "PF-22G", "CV-110", "BR-45", "PL-80",
+                     "CX-200", "TB-12", "RG-30", "FD-60", "GR-25", "TP-500"]
+    names = ["Tampa Flip-Top 28mm", "Frasco 500ml", "Preforma 22g",
+             "Conector Veicular 110", "Bucha Redonda 45mm", "Pallet Liso 80x80",
+             "Caixa Organizadora 200L", "Tubete 12mm", "Rótulo Garra 30mm",
+             "Flange Diâmetro 60", "Grade Retangular 25L", "Tampa Press-On 500"]
+    clients = ["AutoParts Ltda", "Embala Tudo", "PetBrasil S.A.", "VeiculTech",
+               "Plásticos Unidos", "LogPack", "CasaOrg", "TuboFlex",
+               "RotuloPro", "TechFlange", "AgriPlast", "TampaBrasil"]
 
     today = date.today()
+    orders = []
     for i in range(12):
         qty = random.randint(5000, 50000)
         produced = random.randint(0, qty) if statuses[i] != "planned" else 0
         good = int(produced * random.uniform(0.92, 0.99))
-        db.add(ProductionOrder(
+        machine_code = f"INJ-{(i % 10) + 1:02d}"
+        o = ProductionOrder(
             order_number=f"OP-2025-{i + 1:03d}",
-            product_code=products[i], product_name=names[i],
+            product_id=product_ids[product_codes[i]],
+            product_name=names[i],
             quantity_planned=qty, quantity_produced=produced,
             quantity_good=good, quantity_rejected=produced - good,
-            status=statuses[i], priority=random.choice(["normal", "high", "urgent"]),
-            machine_code=f"INJ-{(i % 10) + 1:02d}",
+            status=statuses[i],
+            priority=random.choice(["normal", "high", "urgent"]),
+            machine_id=machine_ids[machine_code],
             client=clients[i],
             due_date=today + timedelta(days=random.randint(1, 14)),
-        ))
+        )
+        db.add(o)
+        orders.append(o)
+    await db.flush()
+    return {o.order_number: o.id for o in orders}
 
 
 # ── Planning ─────────────────────────────────────────────────
-async def _seed_planning(db: AsyncSession):
+async def _seed_planning(
+    db: AsyncSession, machine_ids: dict[str, int], product_ids: dict[str, int]
+):
     today = date.today()
-    products = ["TFT-28", "FR-500", "PF-22G", "CV-110", "BR-45", "PL-80"]
-    names = ["Tampa Flip-Top 28mm", "Frasco 500ml", "Preforma 22g", "Conector Veicular 110",
-             "Bucha Redonda 45mm", "Pallet Liso 80x80"]
+    product_codes = ["TFT-28", "FR-500", "PF-22G", "CV-110", "BR-45", "PL-80"]
+    names = ["Tampa Flip-Top 28mm", "Frasco 500ml", "Preforma 22g",
+             "Conector Veicular 110", "Bucha Redonda 45mm", "Pallet Liso 80x80"]
     for day_offset in range(7):
         d = today + timedelta(days=day_offset)
         for machine_idx in range(1, 11):
-            prod_idx = random.randint(0, len(products) - 1)
+            prod_idx = random.randint(0, len(product_codes) - 1)
+            machine_code = f"INJ-{machine_idx:02d}"
             db.add(Planning(
-                machine_code=f"INJ-{machine_idx:02d}",
-                product_code=products[prod_idx],
+                machine_id=machine_ids[machine_code],
+                product_id=product_ids[product_codes[prod_idx]],
                 product_name=names[prod_idx],
                 quantity_planned=random.randint(2000, 20000),
                 date=d, shift=random.choice(["A", "B", "C"]),
@@ -211,23 +271,32 @@ async def _seed_planning(db: AsyncSession):
                 cavities=random.choice([1, 2, 4]),
                 weight_grams=random.uniform(2, 50),
                 material=random.choice(["PP", "PET", "PEAD", "PA6.6"]),
-                sequence=1, status="pendente" if day_offset > 0 else "em_andamento",
+                sequence=1,
+                status="pendente" if day_offset > 0 else "em_andamento",
             ))
 
 
 # ── Production Entries ────────────────────────────────────────
-async def _seed_production_entries(db: AsyncSession):
+async def _seed_production_entries(
+    db: AsyncSession, machine_ids: dict[str, int],
+    product_ids: dict[str, int], op_by_name: dict[str, int]
+):
     today = datetime.now(timezone.utc)
+    operator_names = ["Roberto Silva", "Ana Costa", "Pedro Santos", "Maria Oliveira"]
+    product_codes = ["TFT-28", "FR-500", "PF-22G", "CV-110", "BR-45", "PL-80"]
     for day_offset in range(30):
         ts = today - timedelta(days=day_offset)
         for machine_idx in range(1, 11):
-            for entry in range(random.randint(2, 6)):
+            machine_code = f"INJ-{machine_idx:02d}"
+            for _ in range(random.randint(2, 6)):
                 good = random.randint(100, 2000)
                 rej = random.randint(0, int(good * 0.08))
+                prod_code = random.choice(product_codes)
+                op_name = random.choice(operator_names)
                 db.add(ProductionEntry(
-                    machine_code=f"INJ-{machine_idx:02d}",
-                    product_code=random.choice(["TFT-28", "FR-500", "PF-22G", "CV-110", "BR-45", "PL-80"]),
-                    operator_name=random.choice(["Roberto Silva", "Ana Costa", "Pedro Santos", "Maria Oliveira"]),
+                    machine_id=machine_ids[machine_code],
+                    product_id=product_ids[prod_code],
+                    operator_id=op_by_name[op_name],
                     shift=random.choice(["A", "B", "C"]),
                     quantity_good=good, quantity_rejected=rej,
                     cycle_time_actual=random.uniform(15, 50),
@@ -236,8 +305,11 @@ async def _seed_production_entries(db: AsyncSession):
 
 
 # ── Downtimes ─────────────────────────────────────────────────
-async def _seed_downtimes(db: AsyncSession):
-    categories = ["mecanica", "eletrica", "setup", "processo", "qualidade", "falta_material", "programada"]
+async def _seed_downtimes(
+    db: AsyncSession, machine_ids: dict[str, int], op_by_name: dict[str, int]
+):
+    categories = ["mecanica", "eletrica", "setup", "processo",
+                  "qualidade", "falta_material", "programada"]
     reasons = [
         "Troca de molde", "Falha no bico injetor", "Aquecimento irregular",
         "Falta de matéria-prima", "Manutenção preventiva", "Ajuste de parâmetros",
@@ -245,15 +317,20 @@ async def _seed_downtimes(db: AsyncSession):
         "Limpeza de molde", "Quebra de extrator", "Setup de máquina",
     ]
     today = datetime.now(timezone.utc)
+    operator_names = ["Roberto Silva", "Ana Costa", "Pedro Santos"]
 
     # Paradas ativas (2 máquinas paradas)
     db.add(ActiveDowntime(
-        machine_code="INJ-05", reason="Troca de molde", category="setup",
-        operator_name="Roberto Silva", shift="A", start_time=today - timedelta(minutes=45),
+        machine_id=machine_ids["INJ-05"],
+        reason="Troca de molde", category="setup",
+        operator_id=op_by_name["Roberto Silva"],
+        shift="A", start_time=today - timedelta(minutes=45),
     ))
     db.add(ActiveDowntime(
-        machine_code="INJ-09", reason="Falta de matéria-prima", category="falta_material",
-        operator_name="Pedro Santos", shift="A", start_time=today - timedelta(minutes=120),
+        machine_id=machine_ids["INJ-09"],
+        reason="Falta de matéria-prima", category="falta_material",
+        operator_id=op_by_name["Pedro Santos"],
+        shift="A", start_time=today - timedelta(minutes=120),
     ))
 
     # Histórico (30 dias)
@@ -261,18 +338,23 @@ async def _seed_downtimes(db: AsyncSession):
         for _ in range(random.randint(3, 8)):
             start = today - timedelta(days=day_offset, hours=random.randint(0, 20))
             dur = random.uniform(5, 120)
+            machine_code = f"INJ-{random.randint(1, 10):02d}"
+            op_name = random.choice(operator_names)
             db.add(DowntimeHistory(
-                machine_code=f"INJ-{random.randint(1, 10):02d}",
-                reason=random.choice(reasons), category=random.choice(categories),
-                operator_name=random.choice(["Roberto Silva", "Ana Costa", "Pedro Santos"]),
+                machine_id=machine_ids[machine_code],
+                reason=random.choice(reasons),
+                category=random.choice(categories),
+                operator_id=op_by_name[op_name],
                 shift=random.choice(["A", "B", "C"]),
-                start_time=start, end_time=start + timedelta(minutes=dur),
-                duration_minutes=round(dur, 1), is_planned=random.random() < 0.2,
+                start_time=start,
+                end_time=start + timedelta(minutes=dur),
+                duration_minutes=round(dur, 1),
+                is_planned=random.random() < 0.2,
             ))
 
 
 # ── OEE History ───────────────────────────────────────────────
-async def _seed_oee_history(db: AsyncSession):
+async def _seed_oee_history(db: AsyncSession, machine_ids: dict[str, int]):
     today = date.today()
     for day_offset in range(30):
         d = today - timedelta(days=day_offset)
@@ -285,23 +367,30 @@ async def _seed_oee_history(db: AsyncSession):
             good = int(total * qual / 100)
             planned = 480.0
             running = planned * avail / 100
+            machine_code = f"INJ-{machine_idx:02d}"
             db.add(OeeHistory(
-                machine_code=f"INJ-{machine_idx:02d}",
+                machine_id=machine_ids[machine_code],
                 date=d, shift=random.choice(["A", "B", "C"]),
                 availability=round(avail, 1), performance=round(perf, 1),
                 quality_rate=round(qual, 1), oee=round(oee, 1),
-                planned_time_minutes=planned, running_time_minutes=round(running, 1),
+                planned_time_minutes=planned,
+                running_time_minutes=round(running, 1),
                 downtime_minutes=round(planned - running, 1),
-                total_produced=total, good_produced=good, rejected=total - good,
+                total_produced=total, good_produced=good,
+                rejected=total - good,
                 ideal_cycle_seconds=random.uniform(15, 40),
             ))
 
 
 # ── Quality Measurements ─────────────────────────────────────
-async def _seed_quality(db: AsyncSession):
+async def _seed_quality(
+    db: AsyncSession, machine_ids: dict[str, int], product_ids: dict[str, int]
+):
     today = datetime.now(timezone.utc)
-    dimensions = ["Diâmetro externo", "Altura", "Espessura parede", "Peso", "Diâmetro interno"]
+    dimensions = ["Diâmetro externo", "Altura", "Espessura parede",
+                  "Peso", "Diâmetro interno"]
     defects = ["rebarba", "bolha", "mancha", "dimensional", "deformação"]
+    product_codes = ["TFT-28", "FR-500", "PF-22G", "CV-110"]
 
     for day_offset in range(15):
         for _ in range(random.randint(5, 15)):
@@ -309,9 +398,11 @@ async def _seed_quality(db: AsyncSession):
             tolerance = nominal * 0.02
             measured = nominal + random.uniform(-tolerance * 1.5, tolerance * 1.5)
             approved = abs(measured - nominal) <= tolerance
+            machine_code = f"INJ-{random.randint(1, 10):02d}"
+            prod_code = random.choice(product_codes)
             db.add(QualityMeasurement(
-                machine_code=f"INJ-{random.randint(1, 10):02d}",
-                product_code=random.choice(["TFT-28", "FR-500", "PF-22G", "CV-110"]),
+                machine_id=machine_ids[machine_code],
+                product_id=product_ids[prod_code],
                 inspector=random.choice(["Ana Qualidade", "Paulo Inspetor"]),
                 dimension_name=random.choice(dimensions),
                 nominal_value=round(nominal, 2),
@@ -326,45 +417,78 @@ async def _seed_quality(db: AsyncSession):
 
 
 # ── Notifications ─────────────────────────────────────────────
-async def _seed_notifications(db: AsyncSession):
-    db.add(Notification(title="Máquina INJ-05 parada", message="Parada há mais de 30 minutos — troca de molde", type="warning", machine_code="INJ-05"))
-    db.add(Notification(title="OEE abaixo da meta", message="INJ-03 com OEE de 62% — abaixo da meta de 75%", type="error", machine_code="INJ-03"))
-    db.add(Notification(title="Ordem OP-2025-001 completa", message="100% da quantidade planejada atingida", type="success"))
-    db.add(Notification(title="Manutenção preventiva", message="INJ-07 tem manutenção programada para amanhã", type="info", machine_code="INJ-07"))
+async def _seed_notifications(db: AsyncSession, machine_ids: dict[str, int]):
+    db.add(Notification(
+        title="Máquina INJ-05 parada",
+        message="Parada há mais de 30 minutos — troca de molde",
+        type="warning", machine_id=machine_ids["INJ-05"],
+    ))
+    db.add(Notification(
+        title="OEE abaixo da meta",
+        message="INJ-03 com OEE de 62% — abaixo da meta de 75%",
+        type="error", machine_id=machine_ids["INJ-03"],
+    ))
+    db.add(Notification(
+        title="Ordem OP-2025-001 completa",
+        message="100% da quantidade planejada atingida",
+        type="success",
+    ))
+    db.add(Notification(
+        title="Manutenção preventiva",
+        message="INJ-07 tem manutenção programada para amanhã",
+        type="info", machine_id=machine_ids["INJ-07"],
+    ))
 
 
 # ── Losses ────────────────────────────────────────────────────
-async def _seed_losses(db: AsyncSession):
+async def _seed_losses(
+    db: AsyncSession, machine_ids: dict[str, int],
+    product_ids: dict[str, int], order_ids: dict[str, int]
+):
     categories = ["refugo", "rebarba", "dimensional", "cor", "contaminacao"]
     materials = ["PP", "PET", "PEAD", "PA6.6", "PS", "POM"]
+    product_codes = ["TFT-28", "FR-500", "PF-22G", "CV-110", "BR-45"]
     today = datetime.now(timezone.utc)
+    order_numbers = list(order_ids.keys())
+
     for day_offset in range(15):
         for _ in range(random.randint(2, 6)):
+            machine_code = f"INJ-{random.randint(1, 10):02d}"
+            prod_code = random.choice(product_codes)
+            order_num = random.choice(order_numbers)
             db.add(LossEntry(
-                machine_code=f"INJ-{random.randint(1,10):02d}",
-                product_code=random.choice(["TFT-28", "FR-500", "PF-22G", "CV-110", "BR-45"]),
-                order_number=f"OP-2025-{random.randint(1,12):03d}",
+                machine_id=machine_ids[machine_code],
+                product_id=product_ids[prod_code],
+                order_id=order_ids[order_num],
                 quantity=random.randint(5, 200),
                 weight_kg=round(random.uniform(0.1, 15.0), 2),
-                reason=random.choice(["Rebarba excessiva", "Fora de dimensional", "Contaminação", "Cor irregular", "Bolha"]),
+                reason=random.choice([
+                    "Rebarba excessiva", "Fora de dimensional",
+                    "Contaminação", "Cor irregular", "Bolha",
+                ]),
                 category=random.choice(categories),
                 material=random.choice(materials),
                 is_manual=random.random() < 0.3,
-                created_at=today - timedelta(days=day_offset, hours=random.randint(0, 8)),
+                timestamp=today - timedelta(days=day_offset, hours=random.randint(0, 8)),
             ))
 
 
 # ── Setup Entries ─────────────────────────────────────────────
-async def _seed_setups(db: AsyncSession):
+async def _seed_setups(
+    db: AsyncSession, machine_ids: dict[str, int], op_by_name: dict[str, int]
+):
     setup_types = ["troca_molde", "troca_cor", "troca_material", "ajuste"]
     mold_codes = ["MLD-001", "MLD-002", "MLD-003", "MLD-004", "MLD-005", "MLD-006"]
+    operator_names = ["Roberto Silva", "Ana Costa", "Pedro Santos"]
     today = datetime.now(timezone.utc)
     for day_offset in range(10):
         for _ in range(random.randint(1, 4)):
             start = today - timedelta(days=day_offset, hours=random.randint(1, 20))
             dur = random.uniform(10, 90)
+            machine_code = f"INJ-{random.randint(1, 10):02d}"
+            op_name = random.choice(operator_names)
             db.add(SetupEntry(
-                machine_code=f"INJ-{random.randint(1,10):02d}",
+                machine_id=machine_ids[machine_code],
                 setup_type=random.choice(setup_types),
                 mold_from=random.choice(mold_codes),
                 mold_to=random.choice(mold_codes),
@@ -374,57 +498,74 @@ async def _seed_setups(db: AsyncSession):
                 end_time=start + timedelta(minutes=dur),
                 duration_minutes=round(dur, 1),
                 status="concluido",
-                operator_name=random.choice(["Roberto Silva", "Ana Costa", "Pedro Santos"]),
+                operator_id=op_by_name[op_name],
             ))
 
 
 # ── PMP (Moído/Borra/Sucata) ─────────────────────────────────
-async def _seed_pmp(db: AsyncSession):
+async def _seed_pmp(
+    db: AsyncSession, machine_ids: dict[str, int], op_by_name: dict[str, int]
+):
     pmp_types = ["moido", "borra", "sucata"]
     destinations = ["reprocesso", "descarte", "venda"]
+    operator_names = ["Roberto Silva", "Ana Costa", "Pedro Santos"]
     today = datetime.now(timezone.utc)
     for day_offset in range(15):
         for _ in range(random.randint(1, 5)):
+            machine_code = f"INJ-{random.randint(1, 10):02d}"
+            op_name = random.choice(operator_names)
             db.add(PmpEntry(
                 type=random.choice(pmp_types),
-                machine_code=f"INJ-{random.randint(1,10):02d}",
+                machine_id=machine_ids[machine_code],
                 weight_kg=round(random.uniform(0.5, 50.0), 2),
                 destination=random.choice(destinations),
                 material=random.choice(["PP", "PET", "PEAD", "PA6.6"]),
-                operator_name=random.choice(["Roberto Silva", "Ana Costa", "Pedro Santos"]),
+                operator_id=op_by_name[op_name],
                 notes=random.choice(["", "Lote contaminado", "Reprocesso programado", ""]),
-                created_at=today - timedelta(days=day_offset, hours=random.randint(0, 8)),
+                timestamp=today - timedelta(days=day_offset, hours=random.randint(0, 8)),
             ))
 
 
 # ── Quality Lots ──────────────────────────────────────────────
-async def _seed_quality_lots(db: AsyncSession):
+async def _seed_quality_lots(
+    db: AsyncSession, machine_ids: dict[str, int],
+    product_ids: dict[str, int], order_ids: dict[str, int]
+):
     statuses = ["quarentena", "em_triagem", "concluida"]
+    product_codes = ["TFT-28", "FR-500", "PF-22G", "CV-110"]
     today = datetime.now(timezone.utc)
+    order_numbers = list(order_ids.keys())
+
     for i in range(15):
         status = random.choice(statuses)
         approved = random.randint(500, 5000) if status == "concluida" else 0
         rejected = random.randint(10, 200) if status == "concluida" else 0
+        machine_code = f"INJ-{random.randint(1, 10):02d}"
+        prod_code = random.choice(product_codes)
+        order_num = random.choice(order_numbers)
         db.add(QualityLot(
-            lot_number=f"LOT-2025-{i+1:04d}",
-            product_code=random.choice(["TFT-28", "FR-500", "PF-22G", "CV-110"]),
-            machine_code=f"INJ-{random.randint(1,10):02d}",
-            order_number=f"OP-2025-{random.randint(1,12):03d}",
+            lot_number=f"LOT-2025-{i + 1:04d}",
+            product_id=product_ids[prod_code],
+            machine_id=machine_ids[machine_code],
+            order_id=order_ids[order_num],
             quantity=random.randint(1000, 10000),
-            reason=random.choice(["Variação dimensional", "Contaminação", "Cor fora do padrão", "Rebarbas excessivas", "Inspeção de lote"]),
+            reason=random.choice([
+                "Variação dimensional", "Contaminação",
+                "Cor fora do padrão", "Rebarbas excessivas",
+                "Inspeção de lote",
+            ]),
             status=status,
             approved_qty=approved,
             rejected_qty=rejected,
             returned_to_production=random.choice([True, False]) if status == "concluida" else False,
             inspector=random.choice(["Ana Qualidade", "Paulo Inspetor"]),
             concluded_at=today - timedelta(days=i) if status == "concluida" else None,
-            created_at=today - timedelta(days=i + 1),
         ))
 
 
 # ── Mold Maintenance ─────────────────────────────────────────
-async def _seed_mold_maintenance(db: AsyncSession):
-    mold_codes = ["MLD-001", "MLD-002", "MLD-003", "MLD-004", "MLD-005", "MLD-006"]
+async def _seed_mold_maintenance(db: AsyncSession, mold_ids: dict[str, int]):
+    mold_codes = list(mold_ids.keys())
     maint_types = ["preventiva", "corretiva", "limpeza"]
     statuses = ["concluida", "concluida", "pendente", "em_andamento"]
     today = datetime.now(timezone.utc)
@@ -433,23 +574,26 @@ async def _seed_mold_maintenance(db: AsyncSession):
         start = today - timedelta(days=i * 3, hours=random.randint(1, 12))
         dur_h = round(random.uniform(0.5, 8.0), 1)
         end = start + timedelta(hours=dur_h) if status == "concluida" else None
+        mold_code = random.choice(mold_codes)
         db.add(MoldMaintenance(
-            mold_code=random.choice(mold_codes),
+            mold_id=mold_ids[mold_code],
             maintenance_type=random.choice(maint_types),
             technician=random.choice(["Técnico A", "Técnico B", "Técnico C"]),
-            description=random.choice(["Troca de pinos extratores", "Polimento cavidade", "Limpeza geral", "Reparo canal quente", "Troca anel O-Ring"]),
+            description=random.choice([
+                "Troca de pinos extratores", "Polimento cavidade",
+                "Limpeza geral", "Reparo canal quente", "Troca anel O-Ring",
+            ]),
             start_time=start,
             end_time=end,
             duration_hours=dur_h if status == "concluida" else None,
             cost=round(random.uniform(100, 5000), 2) if status == "concluida" else None,
             parts_replaced=random.choice(["Pinos, Molas", "Anel O-Ring", "Bico injetor", None]),
             status=status,
-            created_at=start,
         ))
 
 
 # ── PCP Messages ─────────────────────────────────────────────
-async def _seed_pcp_messages(db: AsyncSession):
+async def _seed_pcp_messages(db: AsyncSession, machine_ids: dict[str, int]):
     messages = [
         ("Priorizar OP-2025-001 — cliente urgente", 5, "urgent", "INJ-01"),
         ("Troca de produto INJ-03 às 14h", 3, "info", "INJ-03"),
@@ -458,45 +602,52 @@ async def _seed_pcp_messages(db: AsyncSession):
         ("INJ-07 liberada após manutenção", 3, "info", "INJ-07"),
         ("Auditor externo amanhã — preparar documentação", 4, "warning", None),
     ]
-    for msg, priority, msg_type, machine in messages:
+    for msg, priority, msg_type, machine_code in messages:
         db.add(PcpMessage(
             message=msg, priority=priority, type=msg_type,
-            target_machine=machine, is_active=True,
+            target_machine_id=machine_ids[machine_code] if machine_code else None,
+            is_active=True,
         ))
 
 
 # ── Leadership (Escala + Absenteísmo) ────────────────────────
-async def _seed_leadership(db: AsyncSession):
+async def _seed_leadership(
+    db: AsyncSession, op_by_reg: dict[str, int],
+    op_by_name: dict[str, int], machine_ids: dict[str, int]
+):
     operators = [
-        ("OP-001", "Roberto Silva"), ("OP-002", "Ana Costa"), ("OP-003", "Pedro Santos"),
-        ("OP-004", "Maria Oliveira"), ("OP-005", "João Lima"), ("OP-006", "Carlos Ferreira"),
-        ("OP-007", "Luiza Souza"), ("OP-008", "Fernando Alves"), ("OP-009", "Patricia Ramos"),
+        ("OP-001", "Roberto Silva"), ("OP-002", "Ana Costa"),
+        ("OP-003", "Pedro Santos"), ("OP-004", "Maria Oliveira"),
+        ("OP-005", "João Lima"), ("OP-006", "Carlos Ferreira"),
+        ("OP-007", "Luiza Souza"), ("OP-008", "Fernando Alves"),
+        ("OP-009", "Patricia Ramos"),
     ]
     today = date.today()
     for day_offset in range(7):
         d = today + timedelta(days=day_offset)
         for reg, name in operators[:6]:
+            machine_code = f"INJ-{random.randint(1, 10):02d}"
             db.add(OperatorSchedule(
-                operator_registration=reg,
+                operator_id=op_by_reg[reg],
                 operator_name=name,
                 date=d,
                 shift=random.choice(["A", "B", "C"]),
-                machine_code=f"INJ-{random.randint(1,10):02d}",
+                machine_id=machine_ids[machine_code],
                 position=random.choice(["operador", "lider", "auxiliar"]),
             ))
 
     # Absenteísmo
     reasons = ["falta", "atestado", "atraso", "ferias", "folga"]
-    for i in range(12):
+    for _ in range(12):
         reg, name = random.choice(operators)
         d = today - timedelta(days=random.randint(1, 30))
         db.add(AbsenteeismEntry(
-            operator_registration=reg,
+            operator_id=op_by_reg[reg],
             operator_name=name,
             date=d,
             shift=random.choice(["A", "B", "C"]),
             reason=random.choice(reasons),
-            hours_absent=round(random.uniform(1, 8), 1),
+            hours_absent=random.randint(1, 8),
             justified=random.random() < 0.6,
             notes=random.choice(["", "Atestado médico", "Atraso transporte", ""]),
         ))

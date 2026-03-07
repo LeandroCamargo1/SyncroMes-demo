@@ -1,40 +1,53 @@
 """
 Models: ActiveDowntime, DowntimeHistory — Paradas de máquina
 """
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean
-from sqlalchemy.sql import func
+from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Enum, ForeignKey, Index
+from sqlalchemy.orm import relationship
 from app.database import Base
+from app.models.enums import DowntimeCategory
 
 
 class ActiveDowntime(Base):
     __tablename__ = "active_downtimes"
 
-    id = Column(Integer, primary_key=True, index=True)
-    machine_code = Column(String(20), nullable=False, index=True)
+    machine_id = Column(Integer, ForeignKey("machines.id"), nullable=False, index=True)
     reason = Column(String(200), nullable=False)
-    category = Column(String(50), nullable=False)  # mecanica, eletrica, setup, processo, qualidade, falta_material, programada
+    category = Column(Enum(DowntimeCategory), nullable=False)
     subcategory = Column(String(100), nullable=True)
-    operator_name = Column(String(100), nullable=True)
+    operator_id = Column(Integer, ForeignKey("operators.id"), nullable=True)
     shift = Column(String(20), nullable=True)
-    start_time = Column(DateTime(timezone=True), server_default=func.now())
+    start_time = Column(DateTime(timezone=True), nullable=False)
     notes = Column(String(500), nullable=True)
     is_planned = Column(Boolean, default=False)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    # ── Relationships ─────────────────────────────────────
+    machine = relationship("Machine", back_populates="active_downtimes", lazy="joined")
+    operator = relationship("Operator", back_populates="active_downtimes", lazy="joined")
+
+    @property
+    def machine_code(self) -> str | None:
+        return self.machine.code if self.machine else None
+
+    @property
+    def operator_name(self) -> str | None:
+        return self.operator.name if self.operator else None
 
     def __repr__(self):
-        return f"<ActiveDowntime {self.machine_code} reason={self.reason}>"
+        return f"<ActiveDowntime machine_id={self.machine_id} reason={self.reason}>"
 
 
 class DowntimeHistory(Base):
     __tablename__ = "downtime_history"
+    __table_args__ = (
+        Index("ix_dth_machine_start", "machine_id", "start_time"),
+        Index("ix_dth_category", "category"),
+    )
 
-    id = Column(Integer, primary_key=True, index=True)
-    machine_code = Column(String(20), nullable=False, index=True)
+    machine_id = Column(Integer, ForeignKey("machines.id"), nullable=False, index=True)
     reason = Column(String(200), nullable=False)
-    category = Column(String(50), nullable=False)
+    category = Column(Enum(DowntimeCategory), nullable=False)
     subcategory = Column(String(100), nullable=True)
-    operator_name = Column(String(100), nullable=True)
+    operator_id = Column(Integer, ForeignKey("operators.id"), nullable=True)
     shift = Column(String(20), nullable=True)
     start_time = Column(DateTime(timezone=True), nullable=False)
     end_time = Column(DateTime(timezone=True), nullable=False)
@@ -43,7 +56,17 @@ class DowntimeHistory(Base):
     notes = Column(String(500), nullable=True)
     resolved_by = Column(String(100), nullable=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    # ── Relationships ─────────────────────────────────────
+    machine = relationship("Machine", back_populates="downtime_history", lazy="joined")
+    operator = relationship("Operator", back_populates="downtime_history", lazy="joined")
+
+    @property
+    def machine_code(self) -> str | None:
+        return self.machine.code if self.machine else None
+
+    @property
+    def operator_name(self) -> str | None:
+        return self.operator.name if self.operator else None
 
     def __repr__(self):
-        return f"<DowntimeHistory {self.machine_code} dur={self.duration_minutes}min>"
+        return f"<DowntimeHistory machine_id={self.machine_id} dur={self.duration_minutes}min>"

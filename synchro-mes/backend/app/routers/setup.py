@@ -8,9 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.setup import SetupEntry
+from app.models.machine import Machine
 from app.models.user import User
 from app.schemas.setup import SetupEntryCreate, SetupEntryFinish, SetupEntryRead
 from app.services.auth_service import AuthService
+from app.services.fk_resolver import resolve_machine, resolve_operator_by_name
 
 router = APIRouter()
 
@@ -25,11 +27,11 @@ async def list_setups(
 ):
     query = select(SetupEntry).order_by(SetupEntry.start_time.desc()).limit(limit)
     if machine_code:
-        query = query.where(SetupEntry.machine_code == machine_code)
+        query = query.join(SetupEntry.machine).where(Machine.code == machine_code)
     if status:
         query = query.where(SetupEntry.status == status)
     result = await db.execute(query)
-    return result.scalars().all()
+    return result.scalars().unique().all()
 
 
 @router.post("/", response_model=SetupEntryRead, status_code=201)
@@ -38,7 +40,10 @@ async def start_setup(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(AuthService.require_role("admin", "supervisor", "operador")),
 ):
-    entry = SetupEntry(**body.model_dump())
+    data = body.model_dump(exclude={"machine_code", "operator_name"})
+    data["machine_id"] = await resolve_machine(db, body.machine_code)
+    data["operator_id"] = await resolve_operator_by_name(db, body.operator_name)
+    entry = SetupEntry(**data)
     db.add(entry)
     await db.commit()
     await db.refresh(entry)

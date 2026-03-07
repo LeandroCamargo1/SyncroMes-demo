@@ -13,6 +13,7 @@ from app.schemas.leadership import (
     AbsenteeismCreate, AbsenteeismRead,
 )
 from app.services.auth_service import AuthService
+from app.services.fk_resolver import resolve_operator_by_reg, resolve_machine_optional
 
 router = APIRouter()
 
@@ -32,7 +33,7 @@ async def list_schedule(
     if date:
         query = query.where(OperatorSchedule.date == date)
     result = await db.execute(query)
-    return result.scalars().all()
+    return result.scalars().unique().all()
 
 
 @router.post("/schedule", response_model=OperatorScheduleRead, status_code=201)
@@ -41,7 +42,10 @@ async def create_schedule(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(AuthService.require_role("admin", "supervisor")),
 ):
-    entry = OperatorSchedule(**body.model_dump())
+    data = body.model_dump(exclude={"operator_registration", "machine_code"})
+    data["operator_id"] = await resolve_operator_by_reg(db, body.operator_registration)
+    data["machine_id"] = await resolve_machine_optional(db, body.machine_code)
+    entry = OperatorSchedule(**data)
     db.add(entry)
     await db.commit()
     await db.refresh(entry)
@@ -60,7 +64,7 @@ async def list_absenteeism(
     if reason:
         query = query.where(AbsenteeismEntry.reason == reason)
     result = await db.execute(query)
-    return result.scalars().all()
+    return result.scalars().unique().all()
 
 
 @router.post("/absenteeism", response_model=AbsenteeismRead, status_code=201)
@@ -69,7 +73,9 @@ async def create_absenteeism(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(AuthService.require_role("admin", "supervisor")),
 ):
-    entry = AbsenteeismEntry(**body.model_dump())
+    data = body.model_dump(exclude={"operator_registration"})
+    data["operator_id"] = await resolve_operator_by_reg(db, body.operator_registration)
+    entry = AbsenteeismEntry(**data)
     db.add(entry)
     await db.commit()
     await db.refresh(entry)

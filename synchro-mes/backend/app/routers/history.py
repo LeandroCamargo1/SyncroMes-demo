@@ -23,7 +23,7 @@ async def list_logs(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(AuthService.require_role("admin")),
 ):
-    query = select(SystemLog).order_by(SystemLog.created_at.desc()).limit(limit)
+    query = select(SystemLog).order_by(SystemLog.timestamp.desc()).limit(limit)
     if action:
         query = query.where(SystemLog.action == action)
     if user_email:

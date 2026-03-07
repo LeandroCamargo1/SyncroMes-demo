@@ -12,6 +12,7 @@ from app.models.machine import Machine
 from app.models.user import User
 from app.schemas.downtime import ActiveDowntimeCreate, ActiveDowntimeRead, DowntimeHistoryRead
 from app.services.auth_service import AuthService
+from app.services.fk_resolver import resolve_machine, resolve_operator_by_name
 
 router = APIRouter()
 
@@ -25,9 +26,9 @@ async def list_active(
 ):
     query = select(ActiveDowntime).order_by(ActiveDowntime.start_time.desc())
     if machine_code:
-        query = query.where(ActiveDowntime.machine_code == machine_code)
+        query = query.join(ActiveDowntime.machine).where(Machine.code == machine_code)
     result = await db.execute(query)
-    return result.scalars().all()
+    return result.scalars().unique().all()
 
 
 @router.post("/start", response_model=ActiveDowntimeRead, status_code=201)
@@ -37,11 +38,17 @@ async def start_downtime(
     _user: User = Depends(AuthService.require_role("admin", "supervisor", "operador")),
 ):
     """Inicia uma parada de máquina."""
-    dt = ActiveDowntime(**body.model_dump())
+    machine_id = await resolve_machine(db, body.machine_code)
+    operator_id = await resolve_operator_by_name(db, body.operator_name)
+
+    data = body.model_dump(exclude={"machine_code", "operator_name"})
+    data["machine_id"] = machine_id
+    data["operator_id"] = operator_id
+    dt = ActiveDowntime(**data)
     db.add(dt)
 
     # Atualizar status da máquina
-    result = await db.execute(select(Machine).where(Machine.code == body.machine_code))
+    result = await db.execute(select(Machine).where(Machine.id == machine_id))
     machine = result.scalar_one_or_none()
     if machine:
         machine.status = "stopped"
@@ -68,11 +75,11 @@ async def stop_downtime(
     duration = (now - active.start_time).total_seconds() / 60
 
     history = DowntimeHistory(
-        machine_code=active.machine_code,
+        machine_id=active.machine_id,
         reason=active.reason,
         category=active.category,
         subcategory=active.subcategory,
-        operator_name=active.operator_name,
+        operator_id=active.operator_id,
         shift=active.shift,
         start_time=active.start_time,
         end_time=now,
@@ -87,13 +94,13 @@ async def stop_downtime(
     # Checar se máquina tem outras paradas ativas
     remaining = await db.execute(
         select(ActiveDowntime).where(
-            ActiveDowntime.machine_code == active.machine_code,
+            ActiveDowntime.machine_id == active.machine_id,
             ActiveDowntime.id != downtime_id,
         )
     )
     if not remaining.scalars().first():
         machine_result = await db.execute(
-            select(Machine).where(Machine.code == active.machine_code)
+            select(Machine).where(Machine.id == active.machine_id)
         )
         machine = machine_result.scalar_one_or_none()
         if machine:
@@ -114,6 +121,6 @@ async def list_history(
 ):
     query = select(DowntimeHistory).order_by(DowntimeHistory.end_time.desc()).limit(limit)
     if machine_code:
-        query = query.where(DowntimeHistory.machine_code == machine_code)
+        query = query.join(DowntimeHistory.machine).where(Machine.code == machine_code)
     result = await db.execute(query)
-    return result.scalars().all()
+    return result.scalars().unique().all()
