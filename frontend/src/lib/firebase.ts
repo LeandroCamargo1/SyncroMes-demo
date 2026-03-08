@@ -6,12 +6,12 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey: "AIzaSyA58aAskep_4rxq5aZxZ6AzRECMM9Iqic8",
+  authDomain: "syncro-mes.firebaseapp.com",
+  projectId: "syncro-mes",
+  storageBucket: "syncro-mes.firebasestorage.app",
+  messagingSenderId: "769561755524",
+  appId: "1:769561755524:web:e2d75bb472865d9a8be7d1",
 };
 
 const app = initializeApp(firebaseConfig);
