@@ -1,4 +1,5 @@
 import type { WsMessage } from '../types';
+import { isStaticDeploy } from './api';
 
 type WsCallback = (data: WsMessage) => void;
 
@@ -12,6 +13,9 @@ class WebSocketService {
   private channel = 'dashboard';
 
   connect(channel = 'dashboard'): void {
+    // Sem backend em deploy estático (GitHub Pages)
+    if (isStaticDeploy) return;
+
     this.channel = channel;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
